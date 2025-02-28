@@ -494,9 +494,9 @@ To modify the game:
             if (document.getElementById('favicon').dataset.explosionActive === 'true') {
                 return; // Don't update direction during explosion
             }
-            
+            const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
             // Determine if penguin is facing right based on class
-            const isFacingRight = penguin.classList.contains('face-right');
+            const isFacingRight = penguinEmoji.classList.contains('face-right');
             setFavicon(isFacingRight ? 'right' : 'left');
         }
         
