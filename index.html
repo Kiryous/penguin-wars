@@ -51,10 +51,8 @@ To modify the game:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Penguin Wars - Fight the Sailors</title>
-    <!-- Add a link element for the favicon -->
-    <link id="favicon" rel="icon" href="data:image/x-icon;base64,">
-    <!-- Add a hidden canvas element for favicon generation -->
-    <canvas id="favicon-canvas" width="64" height="64" style="display: none;"></canvas>
+    <!-- Use static favicon as default -->
+    <link id="favicon" rel="icon" href="/favicons/penguin-right-favicon.png">
     <style>
         * {
             margin: 0;
@@ -448,7 +446,6 @@ To modify the game:
         let isTouchDevice = false;
         let penguinsRemaining = 2; // Total penguins available
         let gameOver = false;
-        let faviconCanvas; // Canvas for favicon generation
         let faviconLink; // Link element for favicon
         
         // Physics constants
@@ -459,40 +456,17 @@ To modify the game:
         const PIG_RADIUS = 17.5;
         const ELASTICITY = 10; // Reduced elasticity for better control
         
-        // Function to generate favicon from emoji
-        function generateFavicon(emoji, mirrorHorizontal = false) {
-            const canvas = document.getElementById('favicon-canvas');
-            const ctx = canvas.getContext('2d');
+        // Function to set favicon using static files
+        function setFavicon(type) {
+            const favicon = document.getElementById('favicon');
             
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Save context state
-            ctx.save();
-            
-            // Apply horizontal mirroring if needed
-            if (mirrorHorizontal) {
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
+            if (type === 'explosion') {
+                favicon.href = '/favicons/explosion-favicon.png';
+            } else if (type === 'right') {
+                favicon.href = '/favicons/penguin-right-favicon.png';
+            } else if (type === 'left') {
+                favicon.href = '/favicons/penguin-left-favicon.png';
             }
-            
-            // Draw emoji
-            ctx.font = '48px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, canvas.width / 2, canvas.height / 2);
-            
-            // Restore context state
-            ctx.restore();
-            
-            // Convert canvas to data URL
-            return canvas.toDataURL('image/png');
-        }
-        
-        // Function to set favicon
-        function setFavicon(emoji, mirrorHorizontal = false) {
-            const faviconUrl = generateFavicon(emoji, mirrorHorizontal);
-            document.getElementById('favicon').href = faviconUrl;
         }
         
         // Function to update favicon based on penguin direction
@@ -504,7 +478,7 @@ To modify the game:
             
             // Determine if penguin is facing right based on class
             const isFacingRight = penguin.classList.contains('face-right');
-            setFavicon('🐧', isFacingRight);
+            setFavicon(isFacingRight ? 'right' : 'left');
         }
         
         function initGame() {
@@ -515,11 +489,9 @@ To modify the game:
             slingshotBandLeft = document.getElementById('slingshot-band-left');
             slingshotBandRight = document.getElementById('slingshot-band-right');
             touchMarker = document.getElementById('touch-marker');
-            faviconCanvas = document.getElementById('favicon-canvas');
-            faviconLink = document.getElementById('favicon');
             
             // Set initial penguin favicon - initially facing right
-            setFavicon('🐧', true);
+            setFavicon('right');
             
             // Detect if device supports touch
             isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -1195,7 +1167,7 @@ To modify the game:
             document.getElementById('favicon').dataset.explosionActive = 'true';
             
             // Update favicon to explosion
-            setFavicon('💥');
+            setFavicon('explosion');
             
             // Reset favicon to penguin after a delay
             setTimeout(() => {
