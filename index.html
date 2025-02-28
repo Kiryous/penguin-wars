@@ -1,0 +1,1255 @@
+<!--
+CURSOR INSTRUCTIONS:
+===================
+
+This is a simple "Angry Birds" style game called "Penguin Wars" where you launch a penguin to hit boats and sailors.
+
+Game Structure:
+--------------
+1. HTML Structure:
+   - #game-container: Main container for the entire game
+   - #game-area: The playable area containing all game elements
+   - #ground: The white ice surface at the bottom
+   - #grass: The top surface of the ice
+   - #slingshot: The launcher for the penguin
+   - #penguin: The player character (🐧)
+   - .pig: The targets (boats and sailors - 🚢🧍🏻‍♂️)
+
+2. Key Game Mechanics:
+   - Drag the penguin back on the slingshot and release to launch
+   - Physics simulation includes gravity, bounce, and friction
+   - Hit the boats/sailors to score points (100 per target)
+   - Game detects collisions between penguin and targets
+
+3. Key JavaScript Functions:
+   - initGame(): Sets up the game environment and event listeners
+   - startDrag(), onDrag(), endDrag(): Handle penguin launching
+   - updatePhysics(): Handles the physics simulation and collisions
+   - resetPenguin(): Resets the penguin to the slingshot
+   - createPigs(): Creates the target boats/sailors
+   - restartGame(): Resets the entire game state
+
+4. Mobile Optimization:
+   - Touch events are supported for mobile play
+   - Viewport settings prevent unwanted zooming
+   - Special handling for iOS Safari 100vh issue
+
+5. Debug Features:
+   - Toggle debug panel with the debug button
+   - Shows position, velocity, and game state information
+
+To modify the game:
+- Change the emoji in the HTML to alter characters
+- Adjust physics constants (GRAVITY, BOUNCE_FACTOR, etc.) for different feel
+- Modify pig positions in createPigs() to change level layout
+- Edit CSS for visual changes to game elements
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Penguin Wars - Fight the Sailors</title>
+    <!-- Add a link element for the favicon -->
+    <link id="favicon" rel="icon" href="data:image/x-icon;base64,">
+    <!-- Add a hidden canvas element for favicon generation -->
+    <canvas id="favicon-canvas" width="64" height="64" style="display: none;"></canvas>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            background-color: #87CEEB;
+            height: 100%;
+            position: fixed;
+            width: 100%;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            height: calc(var(--vh, 1vh) * 100);
+            overflow: hidden;
+        }
+        
+        #game-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: lightblue;
+            overflow: hidden;
+        }
+        
+        #ground {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 20%;
+            background-color: white;
+        }
+        
+        /* it's actually top surface of the ice — show */
+        #grass {
+            position: absolute;
+            bottom: 20%;
+            width: 100%;
+            height: 5%;
+            background-color: white;
+        }
+        
+        #slingshot {
+            position: absolute;
+            left: 25%;
+            bottom: 25%;
+            width: 15px;
+            height: 100px;
+            background-color: #8B4513;
+            border-radius: 5px 5px 0 0;
+            z-index: 2;
+        }
+        
+        #slingshot-band-left, #slingshot-band-right {
+            position: absolute;
+            width: 5px;
+            height: 60px;
+            background-color: #A52A2A;
+            transform-origin: 50% 0;
+            z-index: 1;
+        }
+        
+        #slingshot-band-left {
+            left: 0;
+            top: 0;
+            transform-origin: 0 0;
+        }
+        
+        #slingshot-band-right {
+            right: 0;
+            top: 0;
+            transform-origin: 100% 0;
+        }
+        
+        #penguin {
+            position: absolute;
+            font-size: 40px;
+            user-select: none;
+            -webkit-user-select: none;
+            z-index: 3;
+            transition: transform 0.1s;
+        }
+        
+        .face-right {
+            transform: scaleX(-1);
+        }
+        
+        .pig {
+            position: absolute;
+            font-size: 35px;
+            user-select: none;
+            -webkit-user-select: none;
+            z-index: 2;
+        }
+        
+        .explosion {
+            position: absolute;
+            font-size: 50px;
+            user-select: none;
+            -webkit-user-select: none;
+            z-index: 4;
+            opacity: 0;
+            transform: scale(0.5) rotate(0deg);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                        opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0 0 10px rgba(255, 200, 0, 0.8));
+        }
+        
+        .explosion.active {
+            opacity: 1;
+            transform: scale(1.8) rotate(15deg);
+        }
+        
+        #score-container {
+            position: absolute;
+            height: 50px;
+            top: 20px;
+            right: 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            color: #ff4500;
+            text-shadow: 2px 2px 0 #ffb700;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        #restart-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 15px;
+            background-color: #ffb700;
+            color: #924e0f;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        #restart-button:active {
+            transform: translateY(2px) scale(0.98); 
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 70px;
+            left: 20px;
+            max-width: 400px;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 10;
+        }
+        
+        #debug-toggle {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        
+        #debug-panel {
+            position: absolute;
+            bottom: 50px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            display: none;
+            z-index: 10;
+            max-width: 300px;
+            max-height: 200px;
+            overflow: auto;
+        }
+        
+        #touch-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border: 2px solid #ff4500;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 20;
+            display: none;
+            transform: translate(-50%, -50%);
+        }
+        
+        @keyframes shake {
+            0% { transform: translate(0, 0); }
+            10% { transform: translate(-5px, -5px); }
+            20% { transform: translate(5px, 5px); }
+            30% { transform: translate(-5px, 5px); }
+            40% { transform: translate(5px, -5px); }
+            50% { transform: translate(-5px, 0); }
+            60% { transform: translate(5px, 0); }
+            70% { transform: translate(0, 5px); }
+            80% { transform: translate(0, -5px); }
+            90% { transform: translate(-2px, 2px); }
+            100% { transform: translate(0, 0); }
+        }
+        
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        
+        #waiting-penguin {
+            position: absolute;
+            font-size: 35px;
+            left: 15%;
+            bottom: 25%;
+            user-select: none;
+            -webkit-user-select: none;
+            z-index: 2;
+        }
+        
+        @keyframes jump {
+            0%, 15%, 30%, 45%, 60%, 75%, 100% { transform: translateY(0); }
+            7.5% { transform: translateY(-15px); }
+            22.5% { transform: translateY(-10px); }
+            37.5% { transform: translateY(-20px); }
+            52.5% { transform: translateY(-8px); }
+            67.5% { transform: translateY(-12px); }
+        }
+        
+        .jumping {
+            animation: jump 4s ease-in-out infinite;
+        }
+        
+        #game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            display: none;
+        }
+        
+        #game-over-content {
+            padding: 20px;
+            text-align: center;
+            max-width: 80%;
+            color: wheat;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        #final-score {
+            font-size: 5rem;
+            color: #ff4500;
+            text-shadow: 2px 2px 0 #ffb700;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .final-score-title {
+            font-weight: bold;
+            color: wheat;
+        }
+        
+        #play-again-button {
+            padding: 15px 30px;
+            background-color: #ffb700;
+            color: #924e0f;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        #play-again-button:hover {
+            background-color: #ff9500;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-area">
+            <div id="grass"></div>
+            <div id="ground"></div>
+            <div id="slingshot">
+                <div id="slingshot-band-left"></div>
+                <div id="slingshot-band-right"></div>
+            </div>
+            <div id="penguin" class="face-right">🐧</div>
+            <div id="waiting-penguin" class="jumping">
+                <span style="transform: scaleX(-1); display: inline-block;">🐧</span>
+            </div>
+            <div id="touch-marker"></div>
+        </div>
+        <div id="score-container"><span id="score">0</span></div>
+        <button id="restart-button">Restart</button>
+        <div id="instructions">
+            Drag the penguin back, then release to launch!<br>
+            Hit as many boats and sailors as possible.<br>
+            Score 100 points per target hit.
+        </div>
+        <button id="debug-toggle">Show Debug</button>
+        <div id="debug-panel"></div>
+        
+        <!-- Game over overlay -->
+        <div id="game-over-overlay">
+            <div id="game-over-content">
+                <header>
+                    <h1>Game Over!</h1>
+                    <p>All penguins have been launched</p>
+                </header>
+                <section>
+                    <p class="final-score-title">Score</p>
+                    <div id="final-score">0</div>
+                </section>
+                <button id="play-again-button">Play Again</button>
+            </div>
+        </div>
+        
+        <!-- Audio elements for sound effects -->
+        <audio id="explosion-sound-1" src="https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3" preload="auto"></audio>
+        <audio id="explosion-sound-2" src="https://assets.mixkit.co/active_storage/sfx/235/235-preview.mp3" preload="auto"></audio>
+    </div>
+
+    <script>
+        // Fix for iOS Safari 100vh viewport issue
+        function setViewportHeight() {
+            let vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        
+        // Initial setup
+        setViewportHeight();
+        window.addEventListener('resize', function() {
+            setViewportHeight();
+            if (!isPenguinLaunched) {
+                resetPositions();
+            }
+        });
+        
+        // Game initialization
+        document.addEventListener('DOMContentLoaded', initGame);
+        window.addEventListener('load', initGame); // Additional initialization on full load
+        
+        // Global variables
+        let penguin;
+        let waitingPenguin;
+        let slingshot;
+        let slingshotBandLeft;
+        let slingshotBandRight;
+        let pigs = [];
+        let score = 0;
+        let isPenguinLaunched = false;
+        let isDragging = false;
+        let initialPenguinPos = { x: 0, y: 0 };
+        let restPosition = { x: 0, y: 0 };
+        let dragStartPos = { x: 0, y: 0 };
+        let currentPos = { x: 0, y: 0 };
+        let velocity = { x: 0, y: 0 };
+        let lastTimestamp = 0;
+        let animationFrameId = null;
+        let debugMode = false;
+        let touchMarker;
+        let isTouchDevice = false;
+        let penguinsRemaining = 2; // Total penguins available
+        let gameOver = false;
+        let faviconCanvas; // Canvas for favicon generation
+        let faviconLink; // Link element for favicon
+        
+        // Physics constants
+        const GRAVITY = 0.5;
+        const BOUNCE_FACTOR = 0.7;
+        const FRICTION = 0.98;
+        const PENGUIN_RADIUS = 20;
+        const PIG_RADIUS = 17.5;
+        const ELASTICITY = 10; // Reduced elasticity for better control
+        
+        // Function to generate favicon from emoji
+        function generateFavicon(emoji, mirrorHorizontal = false) {
+            const canvas = document.getElementById('favicon-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Save context state
+            ctx.save();
+            
+            // Apply horizontal mirroring if needed
+            if (mirrorHorizontal) {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+            
+            // Draw emoji
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, canvas.width / 2, canvas.height / 2);
+            
+            // Restore context state
+            ctx.restore();
+            
+            // Convert canvas to data URL
+            return canvas.toDataURL('image/png');
+        }
+        
+        // Function to set favicon
+        function setFavicon(emoji, mirrorHorizontal = false) {
+            const faviconUrl = generateFavicon(emoji, mirrorHorizontal);
+            document.getElementById('favicon').href = faviconUrl;
+        }
+        
+        // Function to update favicon based on penguin direction
+        function updateFaviconDirection() {
+            // Check if explosion is active
+            if (document.getElementById('favicon').dataset.explosionActive === 'true') {
+                return; // Don't update direction during explosion
+            }
+            
+            // Determine if penguin is facing right based on class
+            const isFacingRight = penguin.classList.contains('face-right');
+            setFavicon('🐧', isFacingRight);
+        }
+        
+        function initGame() {
+            // Get DOM elements
+            penguin = document.getElementById('penguin');
+            waitingPenguin = document.getElementById('waiting-penguin');
+            slingshot = document.getElementById('slingshot');
+            slingshotBandLeft = document.getElementById('slingshot-band-left');
+            slingshotBandRight = document.getElementById('slingshot-band-right');
+            touchMarker = document.getElementById('touch-marker');
+            faviconCanvas = document.getElementById('favicon-canvas');
+            faviconLink = document.getElementById('favicon');
+            
+            // Set initial penguin favicon - initially facing right
+            setFavicon('🐧', true);
+            
+            // Detect if device supports touch
+            isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            
+            // Set initial position for penguin - position it precisely at the top center of the slingshot
+            const slingshotRect = slingshot.getBoundingClientRect();
+            restPosition = {
+                x: slingshotRect.left + (slingshotRect.width / 2) - (penguin.offsetWidth / 2),
+                y: slingshotRect.top - penguin.offsetHeight + 10 // Add a small overlap to make it look like it's on the slingshot
+            };
+            
+            // Make sure the waiting penguin's span has the correct transform
+            const waitingPenguinSpan = waitingPenguin.querySelector('span');
+            if (waitingPenguinSpan) {
+                waitingPenguinSpan.style.transform = 'scaleX(-1)';
+                waitingPenguinSpan.style.display = 'inline-block';
+            } else {
+                // If the span doesn't exist for some reason, recreate it
+                waitingPenguin.innerHTML = '<span style="transform: scaleX(-1); display: inline-block;">🐧</span>';
+            }
+            
+            // Apply random animation delay to waiting penguin
+            applyRandomJumpDelay();
+            
+            // Reset game state
+            resetPenguin();
+            createPigs();
+            score = 0;
+            penguinsRemaining = 2;
+            gameOver = false;
+            document.getElementById('score').textContent = score;
+            document.getElementById('game-over-overlay').style.display = 'none';
+            
+            // Add event listeners for mouse/touch
+            penguin.addEventListener('mousedown', startDrag, { passive: false });
+            penguin.addEventListener('touchstart', startDrag, { passive: false });
+            
+            // Add event listener for restart button
+            document.getElementById('restart-button').addEventListener('click', restartGame);
+            
+            // Add event listener for play again button
+            document.getElementById('play-again-button').addEventListener('click', restartGame);
+            
+            // Add event listener for debug toggle
+            document.getElementById('debug-toggle').addEventListener('click', toggleDebug);
+            
+            // Start debug info updates
+            updateDebugInfo();
+        }
+        
+        function createPigs() {
+            // Clear existing pigs
+            pigs.forEach(pig => {
+                if (pig.element && pig.element.parentNode) {
+                    pig.element.parentNode.removeChild(pig.element);
+                }
+            });
+            pigs = [];
+            
+            // Calculate positions for pigs
+            const gameArea = document.getElementById('game-area');
+            const gameRect = gameArea.getBoundingClientRect();
+            const groundHeight = gameRect.height * 0.20; // Height of the ground
+            const availableHeight = gameRect.height - groundHeight;
+            
+            // Define pig positions (can be adjusted)
+            const pigPositions = [
+                { x: gameRect.width * 0.6, y: availableHeight * 0.8 },
+                { x: gameRect.width * 0.7, y: availableHeight * 0.7 },
+                { x: gameRect.width * 0.8, y: availableHeight * 0.9 },
+                { x: gameRect.width * 0.7, y: availableHeight * 0.5 },
+                { x: gameRect.width * 0.85, y: availableHeight * 0.6 }
+            ];
+            
+            // Create pig elements
+            pigPositions.forEach((pos, index) => {
+                const pigElement = document.createElement('div');
+                pigElement.className = 'pig';
+                pigElement.textContent = '🚢🧍🏻‍♂️';
+                pigElement.style.left = `${pos.x}px`;
+                pigElement.style.top = `${pos.y}px`;
+                gameArea.appendChild(pigElement);
+                
+                pigs.push({
+                    element: pigElement,
+                    position: { x: pos.x, y: pos.y },
+                    isHit: false
+                });
+            });
+        }
+        
+        function startDrag(e) {
+            e.preventDefault();
+            
+            if (isPenguinLaunched || gameOver) return;
+            
+            isDragging = true;
+            const penguinRect = penguin.getBoundingClientRect();
+            dragStartPos = {
+                x: penguinRect.left + penguinRect.width / 2,
+                y: penguinRect.top + penguinRect.height / 2
+            };
+            
+            // Set initial penguin position for elastic calculations
+            initialPenguinPos = {
+                x: parseInt(penguin.style.left) || restPosition.x,
+                y: parseInt(penguin.style.top) || restPosition.y
+            };
+            
+            // Show slingshot bands
+            slingshotBandLeft.style.display = 'block';
+            slingshotBandRight.style.display = 'block';
+            
+            // Show and position touch marker
+                const touchX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                const touchY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+                updateTouchMarker(touchX, touchY);
+            
+            // Add event listeners for movement and release
+            document.addEventListener('mousemove', onDrag, { passive: false });
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+        }
+        
+        function onDrag(e) {
+            e.preventDefault();
+            
+            if (!isDragging) return;
+            
+            // Get drag position based on event type
+            const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            
+            // Update touch marker position
+            updateTouchMarker(clientX, clientY);
+            
+            // Calculate new position
+            const slingshotRect = slingshot.getBoundingClientRect();
+            const slingshotCenterX = slingshotRect.left + slingshotRect.width / 2;
+            const slingshotTopY = slingshotRect.top;
+            
+            // Limit drag distance for reasonable gameplay
+            const dragDistance = {
+                x: clientX - slingshotCenterX,
+                y: clientY - slingshotTopY
+            };
+            
+            // Calculate magnitude of drag
+            const magnitude = Math.sqrt(dragDistance.x * dragDistance.x + dragDistance.y * dragDistance.y);
+            const maxMagnitude = 150; // Maximum drag distance
+            
+            // Limit the drag to be mostly to the left and down from the slingshot
+            // This ensures proper slingshot behavior
+            if (dragDistance.x > 50) { // Limit rightward drag
+                dragDistance.x = 50;
+            }
+            
+            if (magnitude > maxMagnitude) {
+                dragDistance.x = (dragDistance.x / magnitude) * maxMagnitude;
+                dragDistance.y = (dragDistance.y / magnitude) * maxMagnitude;
+            }
+            
+            // Calculate new penguin position
+            currentPos = {
+                x: slingshotCenterX + dragDistance.x - PENGUIN_RADIUS,
+                y: slingshotTopY + dragDistance.y - PENGUIN_RADIUS
+            };
+            
+            // Update penguin position
+            penguin.style.left = `${currentPos.x}px`;
+            penguin.style.top = `${currentPos.y}px`;
+            
+            // Update slingshot bands
+            updateSlingshotBands(currentPos.x + PENGUIN_RADIUS, currentPos.y + PENGUIN_RADIUS);
+        }
+        
+        function updateSlingshotBands(penguinX, penguinY) {
+            const slingshotRect = slingshot.getBoundingClientRect();
+            const slingshotTopCenterX = slingshotRect.left + slingshotRect.width / 2;
+            const slingshotTopY = slingshotRect.top;
+            
+            // Calculate distances for the left band
+            const leftBandStartX = slingshotRect.left;
+            const leftBandStartY = slingshotTopY;
+            const leftDx = penguinX - leftBandStartX;
+            const leftDy = penguinY - leftBandStartY;
+            const leftLength = Math.sqrt(leftDx * leftDx + leftDy * leftDy);
+            const leftAngle = Math.atan2(leftDy, leftDx) - Math.PI/2;
+            
+            // Calculate distances for the right band
+            const rightBandStartX = slingshotRect.right;
+            const rightBandStartY = slingshotTopY;
+            const rightDx = penguinX - rightBandStartX;
+            const rightDy = penguinY - rightBandStartY;
+            const rightLength = Math.sqrt(rightDx * rightDx + rightDy * rightDy);
+            const rightAngle = Math.atan2(rightDy, rightDx) - Math.PI/2;
+            
+            // Update left band
+            slingshotBandLeft.style.height = `${leftLength}px`;
+            slingshotBandLeft.style.transform = `rotate(${leftAngle}rad)`;
+            slingshotBandLeft.style.left = `0px`;
+            slingshotBandLeft.style.transformOrigin = '0 0';
+            
+            // Update right band
+            slingshotBandRight.style.height = `${rightLength}px`;
+            slingshotBandRight.style.transform = `rotate(${rightAngle}rad)`;
+            slingshotBandRight.style.right = `0px`;
+            slingshotBandRight.style.transformOrigin = '100% 0';
+        }
+        
+        function endDrag(e) {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            
+            // Hide touch marker
+            touchMarker.style.display = 'none';
+            
+            // Remove event listeners
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('touchmove', onDrag);
+            document.removeEventListener('mouseup', endDrag);
+            document.removeEventListener('touchend', endDrag);
+            
+            // Calculate velocity based on drag distance
+            const slingshotRect = slingshot.getBoundingClientRect();
+            const slingshotCenterX = slingshotRect.left + slingshotRect.width / 2;
+            const slingshotTopY = slingshotRect.top;
+            
+            const dragDistance = {
+                x: currentPos.x + PENGUIN_RADIUS - slingshotCenterX,
+                y: currentPos.y + PENGUIN_RADIUS - slingshotTopY
+            };
+            
+            // Launch penguin in the opposite direction of drag with proper physics
+            // The further you pull, the more power you get
+            const pullDistance = Math.sqrt(dragDistance.x * dragDistance.x + dragDistance.y * dragDistance.y);
+            const powerFactor = Math.min(pullDistance / 50, 3); // Cap the power factor
+            
+            velocity = {
+                x: -dragDistance.x / ELASTICITY * powerFactor,
+                y: -dragDistance.y / ELASTICITY * powerFactor
+            };
+            
+            // Hide slingshot bands
+            slingshotBandLeft.style.display = 'none';
+            slingshotBandRight.style.display = 'none';
+            
+            // Start physics simulation
+            isPenguinLaunched = true;
+            lastTimestamp = performance.now();
+            animationFrameId = requestAnimationFrame(updatePhysics);
+        }
+        
+        function updatePhysics(timestamp) {
+            // Calculate elapsed time
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+            
+            // Scale time factor to keep physics consistent regardless of frame rate
+            const timeScale = deltaTime / 16; // Normalized to 60fps
+            
+            // Update position based on velocity
+            const newX = currentPos.x + velocity.x * timeScale;
+            const newY = currentPos.y + velocity.y * timeScale;
+            
+            // Check for collision with ground
+            const gameRect = document.getElementById('game-area').getBoundingClientRect();
+            const groundY = gameRect.height * 0.8; // 80% of game area height (ground starts at 20% from bottom)
+            
+            // Check for wall collisions
+            if (newX < 0) {
+                // Left wall collision
+                velocity.x = -velocity.x * BOUNCE_FACTOR;
+                currentPos.x = 0;
+            } else if (newX + PENGUIN_RADIUS * 2 > gameRect.width) {
+                // Right wall collision
+                velocity.x = -velocity.x * BOUNCE_FACTOR;
+                currentPos.x = gameRect.width - PENGUIN_RADIUS * 2;
+            } else {
+                currentPos.x = newX;
+            }
+            
+            // Check for ground collision
+            if (newY + PENGUIN_RADIUS * 2 > groundY) {
+                // Ground collision
+                velocity.y = -velocity.y * BOUNCE_FACTOR;
+                currentPos.y = groundY - PENGUIN_RADIUS * 2;
+                
+                // Apply extra friction when hitting the ground
+                velocity.x *= FRICTION;
+            } else {
+                currentPos.y = newY;
+                // Apply gravity
+                velocity.y += GRAVITY * timeScale;
+            }
+            
+            // Apply friction to slow down the penguin
+            velocity.x *= FRICTION;
+            
+            // Update penguin position
+            penguin.style.left = `${currentPos.x}px`;
+            penguin.style.top = `${currentPos.y}px`;
+            
+            // Update penguin facing direction based on velocity
+            const previousFacingRight = penguin.classList.contains('face-right');
+            
+            if (velocity.x === 0) {
+                penguin.classList.add('face-right');
+            } else if (velocity.x > 0.5) {
+                penguin.classList.add('face-right');
+            } else if (velocity.x < -0.5) {
+                penguin.classList.remove('face-right');
+            }
+            
+            // Update favicon if direction changed
+            const currentFacingRight = penguin.classList.contains('face-right');
+            if (previousFacingRight !== currentFacingRight) {
+                updateFaviconDirection();
+            }
+            
+            // Check for collisions with pigs
+            const penguinCenterX = currentPos.x + PENGUIN_RADIUS;
+            const penguinCenterY = currentPos.y + PENGUIN_RADIUS;
+            
+            pigs.forEach(pig => {
+                if (!pig.isHit) {
+                    const pigRect = pig.element.getBoundingClientRect();
+                    const pigCenterX = pigRect.left + pigRect.width / 2;
+                    const pigCenterY = pigRect.top + pigRect.height / 2;
+                    
+                    // Calculate distance between penguin and pig
+                    const dx = penguinCenterX - pigCenterX;
+                    const dy = penguinCenterY - pigCenterY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Check for collision
+                    if (distance < PENGUIN_RADIUS + PIG_RADIUS) {
+                        // Mark pig as hit
+                        pig.isHit = true;
+                        
+                        // Create explosion effects at the pig's position
+                        createExplosionEffect(pigCenterX, pigCenterY);
+                        
+                        // Hide the pig
+                        pig.element.style.opacity = '0';
+                        
+                        // Update score
+                        score += 100;
+                        document.getElementById('score').textContent = score;
+                        
+                        // Add some bounce effect when hitting a pig
+                        const bounceDirection = {
+                            x: dx / distance,
+                            y: dy / distance
+                        };
+                        
+                        velocity.x += bounceDirection.x * 2;
+                        velocity.y += bounceDirection.y * 2;
+                    }
+                }
+            });
+            
+            // Stop animation if penguin is almost stopped or if it's below all pigs
+            const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+            const penguinIsBelowAllPigs = pigs.every(pig => {
+                if (pig.isHit) return true;
+                const pigRect = pig.element.getBoundingClientRect();
+                return currentPos.y > pigRect.bottom;
+            });
+            
+            if ((speed < 0.5 && Math.abs(velocity.y) < 0.5 && currentPos.y + PENGUIN_RADIUS * 2 >= groundY - 1) || 
+                (penguinIsBelowAllPigs && currentPos.y > gameRect.height * 0.6)) {
+                // Penguin has stopped or is below all pigs
+                cancelAnimationFrame(animationFrameId);
+                
+                // Check if all pigs are hit
+                const allPigsHit = pigs.every(pig => pig.isHit);
+                
+                if (allPigsHit) {
+                    // All pigs hit - show win message in the overlay
+                    showGameOver("You sank all the boats!");
+                } else if (penguinsRemaining > 0) {
+                    // Switch to the next penguin
+                    switchToNextPenguin();
+                } else {
+                    // No more penguins and not all pigs hit - game over
+                    showGameOver("Game Over!");
+                }
+            } else {
+                // Continue animation
+                animationFrameId = requestAnimationFrame(updatePhysics);
+            }
+        }
+        
+        function switchToNextPenguin() {
+            // Decrement penguins remaining
+            penguinsRemaining--;
+            
+            if (penguinsRemaining > 0) {
+                // Move the waiting penguin to the slingshot
+                waitingPenguin.classList.remove('jumping');
+                
+                // Animate the waiting penguin moving to the slingshot
+                const slingshotRect = slingshot.getBoundingClientRect();
+                const waitingPenguinRect = waitingPenguin.getBoundingClientRect();
+                
+                // Create a clone of the waiting penguin for animation
+                const penguinClone = document.createElement('div');
+                penguinClone.id = 'penguin-clone';
+                penguinClone.style.position = 'absolute';
+                penguinClone.style.left = `${waitingPenguinRect.left}px`;
+                penguinClone.style.top = `${waitingPenguinRect.top}px`;
+                penguinClone.style.transition = 'all 0.5s ease-in-out';
+                penguinClone.style.zIndex = '5';
+                penguinClone.style.fontSize = '35px';
+                
+                // Add the penguin emoji with face-right class
+                const penguinSpan = document.createElement('span');
+                penguinSpan.style.transform = 'scaleX(-1)';
+                penguinSpan.style.display = 'inline-block';
+                penguinSpan.textContent = '🐧';
+                penguinClone.appendChild(penguinSpan);
+                
+                document.getElementById('game-area').appendChild(penguinClone);
+                
+                // Hide the original waiting penguin
+                waitingPenguin.style.opacity = '0';
+                
+                // Animate the clone to the slingshot position
+                setTimeout(() => {
+                    penguinClone.style.left = `${restPosition.x}px`;
+                    penguinClone.style.top = `${restPosition.y}px`;
+                }, 50);
+                
+                // After animation completes, reset the penguin
+                setTimeout(() => {
+                    // Remove the clone
+                    if (penguinClone.parentNode) {
+                        penguinClone.parentNode.removeChild(penguinClone);
+                    }
+                    
+                    // Reset the main penguin
+                    resetPenguin();
+                    
+                    // Hide the waiting penguin (it's now in the slingshot)
+                    waitingPenguin.style.display = 'none';
+                }, 600);
+            } else {
+                // No more penguins - check if all pigs are hit
+                const allPigsHit = pigs.every(pig => pig.isHit);
+                if (!allPigsHit) {
+                    // Not all pigs hit - game over
+                    showGameOver("Game Over!");
+                }
+            }
+        }
+        
+        function showGameOver(message) {
+            // Update the game over overlay
+            const gameOverOverlay = document.getElementById('game-over-overlay');
+            const gameOverContent = document.getElementById('game-over-content');
+            const finalScore = document.getElementById('final-score');
+            
+            // Set the message and score
+            gameOverContent.querySelector('h1').textContent = message;
+            finalScore.textContent = score;
+            
+            // Show the overlay
+            gameOverOverlay.style.display = 'flex';
+            
+            // Set game over flag
+            gameOver = true;
+        }
+        
+        function resetPositions() {
+            // Recalculate positions for all game elements
+            const gameArea = document.getElementById('game-area');
+            const gameRect = gameArea.getBoundingClientRect();
+            
+            // Reset penguin position
+            const slingshotRect = slingshot.getBoundingClientRect();
+            restPosition = {
+                x: slingshotRect.left + (slingshotRect.width / 2) - (penguin.offsetWidth / 2),
+                y: slingshotRect.top - penguin.offsetHeight + 10
+            };
+            
+            // Only update penguin position if it's not launched
+            if (!isPenguinLaunched) {
+                penguin.style.left = `${restPosition.x}px`;
+                penguin.style.top = `${restPosition.y}px`;
+                currentPos = { x: restPosition.x, y: restPosition.y };
+            }
+            
+            // Reposition pigs based on new window size
+            const groundHeight = gameRect.height * 0.20;
+            const availableHeight = gameRect.height - groundHeight;
+            
+            pigs.forEach((pig, index) => {
+                if (!pig.isHit) {
+                    // Calculate new positions based on relative positions
+                    let newX, newY;
+                    
+                    switch(index % 5) {
+                        case 0:
+                            newX = gameRect.width * 0.6;
+                            newY = availableHeight * 0.8;
+                            break;
+                        case 1:
+                            newX = gameRect.width * 0.7;
+                            newY = availableHeight * 0.7;
+                            break;
+                        case 2:
+                            newX = gameRect.width * 0.8;
+                            newY = availableHeight * 0.9;
+                            break;
+                        case 3:
+                            newX = gameRect.width * 0.7;
+                            newY = availableHeight * 0.5;
+                            break;
+                        case 4:
+                            newX = gameRect.width * 0.85;
+                            newY = availableHeight * 0.6;
+                            break;
+                    }
+                    
+                    // Update pig position
+                    pig.element.style.left = `${newX}px`;
+                    pig.element.style.top = `${newY}px`;
+                    pig.position = { x: newX, y: newY };
+                }
+            });
+        }
+        
+        function resetPenguin() {
+            // Recalculate the slingshot position every time we reset
+            // This ensures the penguin is always positioned correctly
+            const slingshotRect = slingshot.getBoundingClientRect();
+            restPosition = {
+                x: slingshotRect.left + (slingshotRect.width / 2) - (penguin.offsetWidth / 2),
+                y: slingshotRect.top - penguin.offsetHeight + 10 // Add a small overlap
+            };
+            
+            // Reset penguin position to the slingshot
+            penguin.style.left = `${restPosition.x}px`;
+            penguin.style.top = `${restPosition.y}px`;
+            
+            // Reset physics variables
+            currentPos = { x: restPosition.x, y: restPosition.y };
+            velocity = { x: 0, y: 0 };
+            isPenguinLaunched = false;
+            
+            // Make sure penguin is facing right at reset
+            penguin.classList.add('face-right');
+            
+            // Update favicon to match penguin direction
+            updateFaviconDirection();
+            
+            // Hide slingshot bands and touch marker
+            slingshotBandLeft.style.display = 'none';
+            slingshotBandRight.style.display = 'none';
+            touchMarker.style.display = 'none';
+            
+            // Cancel any ongoing animation
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+        }
+        
+        function restartGame() {
+            // Hide game over overlay
+            document.getElementById('game-over-overlay').style.display = 'none';
+            
+            // Reset penguin
+            resetPenguin();
+            
+            // Reset waiting penguin
+            waitingPenguin.style.display = 'block';
+            waitingPenguin.style.opacity = '1';
+            waitingPenguin.classList.add('jumping');
+            
+            // Make sure the waiting penguin's span has the correct transform
+            const waitingPenguinSpan = waitingPenguin.querySelector('span');
+            if (waitingPenguinSpan) {
+                waitingPenguinSpan.style.transform = 'scaleX(-1)';
+                waitingPenguinSpan.style.display = 'inline-block';
+            } else {
+                // If the span doesn't exist for some reason, recreate it
+                waitingPenguin.innerHTML = '<span style="transform: scaleX(-1); display: inline-block;">🐧</span>';
+            }
+            
+            applyRandomJumpDelay();
+            
+            // Create new pigs
+            createPigs();
+            
+            // Reset score and penguins
+            score = 0;
+            penguinsRemaining = 2;
+            gameOver = false;
+            document.getElementById('score').textContent = score;
+        }
+        
+        function toggleDebug() {
+            const debugPanel = document.getElementById('debug-panel');
+            const debugButton = document.getElementById('debug-toggle');
+            
+            debugMode = !debugMode;
+            
+            if (debugMode) {
+                debugPanel.style.display = 'block';
+                debugButton.textContent = 'Hide Debug';
+            } else {
+                debugPanel.style.display = 'none';
+                debugButton.textContent = 'Show Debug';
+            }
+        }
+        
+        function updateDebugInfo() {
+            if (debugMode) {
+                const debugPanel = document.getElementById('debug-panel');
+                const gameRect = document.getElementById('game-area').getBoundingClientRect();
+                const penguinRect = penguin.getBoundingClientRect();
+                
+                const debugInfo = `
+                    Viewport: ${window.innerWidth}x${window.innerHeight}<br>
+                    Game Area: ${gameRect.width.toFixed(0)}x${gameRect.height.toFixed(0)}<br>
+                    Penguin Pos: (${currentPos.x.toFixed(1)}, ${currentPos.y.toFixed(1)})<br>
+                    Velocity: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(2)})<br>
+                    Penguin State: ${isPenguinLaunched ? 'Launched' : 'Ready'}<br>
+                    Penguins Left: ${penguinsRemaining}<br>
+                    Pigs Remaining: ${pigs.filter(p => !p.isHit).length}/${pigs.length}<br>
+                    Touch Position: (${touchMarker.style.left}, ${touchMarker.style.top})
+                `;
+                
+                debugPanel.innerHTML = debugInfo;
+            }
+            
+            requestAnimationFrame(updateDebugInfo);
+        }
+        
+        // Function to update touch marker position
+        function updateTouchMarker(x, y) {
+            touchMarker.style.display = 'block';
+            touchMarker.style.left = `${x}px`;
+            touchMarker.style.top = `${y}px`;
+        }
+        
+        // Function to create multiple explosions for a more dramatic effect
+        function createExplosionEffect(x, y) {
+            // Create 3-5 explosions at slightly different positions
+            const numExplosions = Math.floor(Math.random() * 3) + 3;
+            
+            // Play explosion sound
+            const soundIndex = Math.random() > 0.5 ? 1 : 2;
+            const explosionSound = document.getElementById(`explosion-sound-${soundIndex}`);
+            if (explosionSound) {
+                explosionSound.currentTime = 0;
+                explosionSound.play().catch(e => console.log("Audio play failed:", e));
+            }
+            
+            // Add shake effect to game area
+            const gameArea = document.getElementById('game-area');
+            gameArea.classList.add('shake');
+            
+            // Remove shake class after animation completes
+            setTimeout(() => {
+                gameArea.classList.remove('shake');
+            }, 500);
+            
+            // Mark explosion as active in favicon
+            document.getElementById('favicon').dataset.explosionActive = 'true';
+            
+            // Update favicon to explosion
+            setFavicon('💥');
+            
+            // Reset favicon to penguin after a delay
+            setTimeout(() => {
+                document.getElementById('favicon').dataset.explosionActive = 'false';
+                updateFaviconDirection();
+            }, 1000);
+            
+            for (let i = 0; i < numExplosions; i++) {
+                // Random offset from the center
+                const offsetX = (Math.random() - 0.5) * 40;
+                const offsetY = (Math.random() - 0.5) * 40;
+                
+                // Random size variation
+                const size = 35 + Math.random() * 30;
+                
+                // Random delay for each explosion
+                const delay = Math.random() * 200;
+                
+                // Random rotation
+                const rotation = (Math.random() - 0.5) * 40;
+                
+                // Create explosion element
+                const explosion = document.createElement('div');
+                explosion.className = 'explosion';
+                explosion.textContent = '💥';
+                explosion.style.fontSize = `${size}px`;
+                explosion.style.left = `${x + offsetX - size/2}px`;
+                explosion.style.top = `${y + offsetY - size/2}px`;
+                document.getElementById('game-area').appendChild(explosion);
+                
+                // Trigger explosion animation with delay
+                setTimeout(() => {
+                    explosion.classList.add('active');
+                    explosion.style.transform = `scale(1.8) rotate(${rotation}deg)`;
+                }, delay);
+                
+                // Remove explosion after animation completes
+                setTimeout(() => {
+                    if (explosion.parentNode) {
+                        explosion.parentNode.removeChild(explosion);
+                    }
+                }, delay + 600);
+            }
+        }
+        
+        function applyRandomJumpDelay() {
+            // Apply a random animation delay to make the jumping more natural
+            const randomDelay = Math.random() * 1; // Random delay between 0 and 4 seconds
+            waitingPenguin.style.animationDelay = `${randomDelay}s`;
+            
+            // Also apply a random animation duration for even more variation
+            const randomDuration = 3.5 + Math.random(); // Random duration between 3.5 and 4.5 seconds
+            waitingPenguin.style.animationDuration = `${randomDuration}s`;
+        }
+    </script>
+</body>
+</html>
