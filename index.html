@@ -305,6 +305,18 @@ To modify the game:
             animation: jump 4s ease-in-out infinite;
         }
         
+        /* Animation for the penguin in the slingshot */
+        @keyframes slingshot-penguin-animation {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-5px) rotate(-3deg); }
+            50% { transform: translateY(0) rotate(0deg); }
+            75% { transform: translateY(-3px) rotate(3deg); }
+        }
+        
+        .slingshot-penguin-animate {
+            animation: slingshot-penguin-animation 3s ease-in-out infinite;
+        }
+        
         #game-over-overlay {
             position: absolute;
             top: 0;
@@ -368,9 +380,11 @@ To modify the game:
                 <div id="slingshot-band-left"></div>
                 <div id="slingshot-band-right"></div>
             </div>
-            <div id="penguin" class="face-right">🐧</div>
+            <div id="penguin">
+                <div class="face-right js-penguin-emoji">🐧</div>
+            </div>
             <div id="waiting-penguin" class="jumping">
-                <span style="transform: scaleX(-1); display: inline-block;">🐧</span>
+                <div class="face-right js-penguin-emoji">🐧</div>
             </div>
             <div id="touch-marker"></div>
         </div>
@@ -504,13 +518,12 @@ To modify the game:
             };
             
             // Make sure the waiting penguin's span has the correct transform
-            const waitingPenguinSpan = waitingPenguin.querySelector('span');
-            if (waitingPenguinSpan) {
-                waitingPenguinSpan.style.transform = 'scaleX(-1)';
-                waitingPenguinSpan.style.display = 'inline-block';
+            const waitingPenguinDiv = waitingPenguin.querySelector('.js-penguin-emoji');
+            if (waitingPenguinDiv) {
+                waitingPenguinDiv.classList.add('face-right');
             } else {
                 // If the span doesn't exist for some reason, recreate it
-                waitingPenguin.innerHTML = '<span style="transform: scaleX(-1); display: inline-block;">🐧</span>';
+                waitingPenguin.innerHTML = '<div class="face-right js-penguin-emoji">🐧</div>';
             }
             
             // Apply random animation delay to waiting penguin
@@ -594,6 +607,9 @@ To modify the game:
                 x: penguinRect.left + penguinRect.width / 2,
                 y: penguinRect.top + penguinRect.height / 2
             };
+            
+            // Remove the animation class when dragging starts
+            penguin.classList.remove('slingshot-penguin-animate');
             
             // Set initial penguin position for elastic calculations
             initialPenguinPos = {
@@ -796,20 +812,21 @@ To modify the game:
             // Update penguin position
             penguin.style.left = `${currentPos.x}px`;
             penguin.style.top = `${currentPos.y}px`;
+            const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
             
             // Update penguin facing direction based on velocity
-            const previousFacingRight = penguin.classList.contains('face-right');
+            const previousFacingRight = penguinEmoji.classList.contains('face-right');
             
             if (velocity.x === 0) {
-                penguin.classList.add('face-right');
+                penguinEmoji.classList.add('face-right');
             } else if (velocity.x > 0.5) {
-                penguin.classList.add('face-right');
+                penguinEmoji.classList.add('face-right');
             } else if (velocity.x < -0.5) {
-                penguin.classList.remove('face-right');
+                penguinEmoji.classList.remove('face-right');
             }
             
             // Update favicon if direction changed
-            const currentFacingRight = penguin.classList.contains('face-right');
+            const currentFacingRight = penguinEmoji.classList.contains('face-right');
             if (previousFacingRight !== currentFacingRight) {
                 updateFaviconDirection();
             }
@@ -952,6 +969,19 @@ To modify the game:
         }
         
         function showGameOver(message) {
+            // For the last penguin, add a delay before showing game over
+            if (penguinsRemaining === 0 && message === "Game Over!") {
+                // Add a 1.5 second delay before showing game over screen
+                setTimeout(() => {
+                    displayGameOverScreen(message);
+                }, 1500);
+            } else {
+                // No delay for win or other scenarios
+                displayGameOverScreen(message);
+            }
+        }
+        
+        function displayGameOverScreen(message) {
             // Update the game over overlay
             const gameOverOverlay = document.getElementById('game-over-overlay');
             const gameOverContent = document.getElementById('game-over-content');
@@ -1045,8 +1075,12 @@ To modify the game:
             velocity = { x: 0, y: 0 };
             isPenguinLaunched = false;
             
+            const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
             // Make sure penguin is facing right at reset
-            penguin.classList.add('face-right');
+            penguinEmoji.classList.add('face-right');
+            
+            // Add animation to the penguin in the slingshot
+            penguin.classList.add('slingshot-penguin-animate');
             
             // Update favicon to match penguin direction
             updateFaviconDirection();
@@ -1075,10 +1109,10 @@ To modify the game:
             waitingPenguin.classList.add('jumping');
             
             // Make sure the waiting penguin's span has the correct transform
-            const waitingPenguinSpan = waitingPenguin.querySelector('span');
-            if (waitingPenguinSpan) {
-                waitingPenguinSpan.style.transform = 'scaleX(-1)';
-                waitingPenguinSpan.style.display = 'inline-block';
+            const waitingPenguinDiv = waitingPenguin.querySelector('span');
+            if (waitingPenguinDiv) {
+                waitingPenguinDiv.style.transform = 'scaleX(-1)';
+                waitingPenguinDiv.style.display = 'inline-block';
             } else {
                 // If the span doesn't exist for some reason, recreate it
                 waitingPenguin.innerHTML = '<span style="transform: scaleX(-1); display: inline-block;">🐧</span>';
@@ -1136,7 +1170,8 @@ To modify the game:
         
         // Function to update touch marker position
         function updateTouchMarker(x, y) {
-            touchMarker.style.display = 'block';
+            // Only show touch marker if debug mode is active
+            touchMarker.style.display = debugMode ? 'block' : 'none';
             touchMarker.style.left = `${x}px`;
             touchMarker.style.top = `${y}px`;
         }
