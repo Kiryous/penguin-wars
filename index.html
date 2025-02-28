@@ -110,8 +110,9 @@ To modify the game:
             width: 15px;
             height: 100px;
             background-color: #8B4513;
-            border-radius: 5px 5px 0 0;
+            border-radius: 5px 5px 7px 7px;
             z-index: 2;
+            transform: translateY(10px);
         }
         
         #slingshot-band-left, #slingshot-band-right {
@@ -330,6 +331,7 @@ To modify the game:
             align-items: center;
             z-index: 100;
             display: none;
+            pointer-events: auto; /* Ensure clicks work on the overlay */
         }
         
         #game-over-content {
@@ -340,6 +342,7 @@ To modify the game:
             display: flex;
             flex-direction: column;
             gap: 20px;
+            border-radius: 15px;
         }
         
         #final-score {
@@ -460,6 +463,7 @@ To modify the game:
         let isTouchDevice = false;
         let penguinsRemaining = 2; // Total penguins available
         let gameOver = false;
+        let gameEnding = false; // Flag to indicate the game is ending but not yet over
         let faviconLink; // Link element for favicon
         
         // Physics constants
@@ -469,6 +473,7 @@ To modify the game:
         const PENGUIN_RADIUS = 20;
         const PIG_RADIUS = 17.5;
         const ELASTICITY = 10; // Reduced elasticity for better control
+        const MIN_EXPLOSION_SPEED = 8; // Minimum speed required for enemies to explode
         
         // Function to set favicon using static files
         function setFavicon(type) {
@@ -792,8 +797,9 @@ To modify the game:
                 currentPos.x = newX;
             }
             
-            // Check for ground collision
-            if (newY + PENGUIN_RADIUS * 2 > groundY) {
+            // Check for ground collision, but only if we're not in gameEnding mode
+            // During gameEnding, let the penguin fall through the ground
+            if (newY + PENGUIN_RADIUS * 2 > groundY && !gameEnding) {
                 // Ground collision
                 velocity.y = -velocity.y * BOUNCE_FACTOR;
                 currentPos.y = groundY - PENGUIN_RADIUS * 2;
@@ -802,8 +808,8 @@ To modify the game:
                 velocity.x *= FRICTION;
             } else {
                 currentPos.y = newY;
-                // Apply gravity
-                velocity.y += GRAVITY * timeScale;
+                // Apply gravity - increase gravity when game is ending for a faster fall
+                velocity.y += gameEnding ? GRAVITY * 1.5 * timeScale : GRAVITY * timeScale;
             }
             
             // Apply friction to slow down the penguin
@@ -812,6 +818,16 @@ To modify the game:
             // Update penguin position
             penguin.style.left = `${currentPos.x}px`;
             penguin.style.top = `${currentPos.y}px`;
+            
+            // If game is ending, make sure penguin is visible above the overlay
+            if (gameEnding) {
+                penguin.style.zIndex = "101";
+                // Add a trail effect during game ending for more visual impact
+                createFallingTrail(currentPos.x + PENGUIN_RADIUS, currentPos.y + PENGUIN_RADIUS);
+            } else {
+                penguin.style.zIndex = "3"; // Reset to original z-index
+            }
+            
             const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
             
             // Update penguin facing direction based on velocity
@@ -848,18 +864,27 @@ To modify the game:
                     
                     // Check for collision
                     if (distance < PENGUIN_RADIUS + PIG_RADIUS) {
-                        // Mark pig as hit
-                        pig.isHit = true;
+                        // Calculate current speed
+                        const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
                         
-                        // Create explosion effects at the pig's position
-                        createExplosionEffect(pigCenterX, pigCenterY);
-                        
-                        // Hide the pig
-                        pig.element.style.opacity = '0';
-                        
-                        // Update score
-                        score += 100;
-                        document.getElementById('score').textContent = score;
+                        // Determine if the penguin is moving fast enough to destroy the pig
+                        if (currentSpeed >= MIN_EXPLOSION_SPEED) {
+                            // Mark pig as hit
+                            pig.isHit = true;
+                            
+                            // Create explosion effects at the pig's position
+                            createExplosionEffect(pigCenterX, pigCenterY);
+                            
+                            // Hide the pig
+                            pig.element.style.opacity = '0';
+                            
+                            // Update score
+                            score += 100;
+                            document.getElementById('score').textContent = score;
+                        } else {
+                            // Not fast enough for explosion - just bounce off
+                            handleLowVelocityCollision(pig, dx, dy, distance);
+                        }
                         
                         // Add some bounce effect when hitting a pig
                         const bounceDirection = {
@@ -881,22 +906,38 @@ To modify the game:
                 return currentPos.y > pigRect.bottom;
             });
             
-            if ((speed < 0.5 && Math.abs(velocity.y) < 0.5 && currentPos.y + PENGUIN_RADIUS * 2 >= groundY - 1) || 
-                (penguinIsBelowAllPigs && currentPos.y > gameRect.height * 0.6)) {
-                // Penguin has stopped or is below all pigs
-                cancelAnimationFrame(animationFrameId);
-                
-                // Check if all pigs are hit
-                const allPigsHit = pigs.every(pig => pig.isHit);
+            // Only stop the penguin if it has actually stopped on the ground
+            // Don't stop just because it's below all pigs
+            const penguinHasStopped = (speed < 0.5 && Math.abs(velocity.y) < 0.5 && currentPos.y + PENGUIN_RADIUS * 2 >= groundY - 1);
+            
+            // Check if all pigs are hit
+            const allPigsHit = pigs.every(pig => pig.isHit);
+            
+            // Determine if we should end the current penguin's turn
+            // If gameEnding is true, we never end the turn - let the penguin continue falling
+            const shouldEndTurn = !gameEnding && (
+                penguinHasStopped || 
+                (penguinIsBelowAllPigs && currentPos.y > gameRect.height * 0.9)
+            );
+            
+            if (shouldEndTurn) {
+                // Penguin has stopped on the ground or is way below the screen
                 
                 if (allPigsHit) {
                     // All pigs hit - show win message in the overlay
+                    cancelAnimationFrame(animationFrameId);
                     showGameOver("You sank all the boats!");
                 } else if (penguinsRemaining > 0) {
                     // Switch to the next penguin
+                    cancelAnimationFrame(animationFrameId);
                     switchToNextPenguin();
                 } else {
                     // No more penguins and not all pigs hit - game over
+                    // Set the gameEnding flag to true
+                    gameEnding = true;
+                    // Continue the animation
+                    animationFrameId = requestAnimationFrame(updatePhysics);
+                    // Show game over after a delay
                     showGameOver("Game Over!");
                 }
             } else {
@@ -969,14 +1010,22 @@ To modify the game:
         }
         
         function showGameOver(message) {
-            // For the last penguin, add a delay before showing game over
+            // For the last penguin, add a delay before stopping the animation
             if (penguinsRemaining === 0 && message === "Game Over!") {
-                // Add a 1.5 second delay before showing game over screen
+                // Show the game over screen immediately
+                displayGameOverScreen(message);
+                
+                // But continue the animation for a while to let the penguin fall
                 setTimeout(() => {
-                    displayGameOverScreen(message);
-                }, 1500);
+                    // Now cancel the animation frame if it's still running
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                    }
+                    // Reset the gameEnding flag
+                    gameEnding = false;
+                }, 2500);
             } else {
-                // No delay for win or other scenarios
+                // No animation continuation for win or other scenarios
                 displayGameOverScreen(message);
             }
         }
@@ -990,6 +1039,13 @@ To modify the game:
             // Set the message and score
             gameOverContent.querySelector('h1').textContent = message;
             finalScore.textContent = score;
+            
+            // Show the overlay with some transparency to see the penguin falling
+            if (gameEnding) {
+                gameOverOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)'; // More transparent
+            } else {
+                gameOverOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)'; // Original opacity
+            }
             
             // Show the overlay
             gameOverOverlay.style.display = 'flex';
@@ -1127,6 +1183,7 @@ To modify the game:
             score = 0;
             penguinsRemaining = 2;
             gameOver = false;
+            gameEnding = false;
             document.getElementById('score').textContent = score;
         }
         
@@ -1248,6 +1305,7 @@ To modify the game:
             }
         }
         
+        // Function to apply a random animation delay to the waiting penguin
         function applyRandomJumpDelay() {
             // Apply a random animation delay to make the jumping more natural
             const randomDelay = Math.random() * 1; // Random delay between 0 and 4 seconds
@@ -1256,6 +1314,61 @@ To modify the game:
             // Also apply a random animation duration for even more variation
             const randomDuration = 3.5 + Math.random(); // Random duration between 3.5 and 4.5 seconds
             waitingPenguin.style.animationDuration = `${randomDuration}s`;
+        }
+        
+        // Function to create a trail effect for the falling penguin
+        function createFallingTrail(x, y) {
+            // Only create a trail occasionally
+            if (Math.random() > 0.2) return;
+            
+            // Create a small particle
+            const particle = document.createElement('div');
+            particle.style.position = 'absolute';
+            particle.style.width = '8px';
+            particle.style.height = '8px';
+            particle.style.borderRadius = '50%';
+            particle.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+            particle.style.left = `${x}px`;
+            particle.style.top = `${y}px`;
+            particle.style.zIndex = '100';
+            particle.style.transition = 'all 0.8s ease-out';
+            
+            document.getElementById('game-area').appendChild(particle);
+            
+            // Animate the particle
+            setTimeout(() => {
+                particle.style.transform = `translate(${(Math.random() - 0.5) * 30}px, ${Math.random() * 50}px)`;
+                particle.style.opacity = '0';
+            }, 10);
+            
+            // Remove the particle after animation
+            setTimeout(() => {
+                if (particle.parentNode) {
+                    particle.parentNode.removeChild(particle);
+                }
+            }, 800);
+        }
+        
+        // Function to handle low velocity collisions with pigs
+        function handleLowVelocityCollision(pig, dx, dy, distance) {
+            // Calculate bounce direction
+            const bounceDirection = {
+                x: dx / distance,
+                y: dy / distance
+            };
+            
+            // Apply a stronger bounce effect for low-velocity collisions
+            velocity.x += bounceDirection.x * 3;
+            velocity.y += bounceDirection.y * 3;
+            
+            // Make the pig wobble a bit
+            pig.element.style.transition = 'transform 0.3s ease-in-out';
+            pig.element.style.transform = `rotate(${(Math.random() - 0.5) * 20}deg) scale(1.1)`;
+            
+            // Reset the pig's transform after the wobble
+            setTimeout(() => {
+                pig.element.style.transform = 'rotate(0deg) scale(1)';
+            }, 300);
         }
     </script>
 </body>
