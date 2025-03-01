@@ -750,12 +750,43 @@ To modify the game:
       <!-- Audio elements for sound effects -->
       <audio
         id="explosion-sound-1"
-        src="https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3"
+        src="audio/boom-1.mp3"
         preload="auto"
       ></audio>
       <audio
         id="explosion-sound-2"
-        src="https://assets.mixkit.co/active_storage/sfx/235/235-preview.mp3"
+        src="audio/boom-2.mp3"
+        preload="auto"
+      ></audio>
+      <!-- New sound effects -->
+      <audio
+        id="stretch-sound-1"
+        src="audio/stretch-1.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="stretch-sound-2"
+        src="audio/stretch-2.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="launch-sound-1"
+        src="audio/launch-1.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="launch-sound-2"
+        src="audio/launch-2.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="sinking-sound-1"
+        src="audio/sinking-1.mp3"
+        preload="auto"
+      ></audio>
+      <audio
+        id="sinking-sound-2"
+        src="audio/sinking-2.mp3"
         preload="auto"
       ></audio>
     </div>
@@ -813,6 +844,9 @@ To modify the game:
       let activePenguinClone = null; // Active penguin clone being launched
       let penguinCloneCount = 0; // Number of penguin clones
       let lastDragDistance = null; // Last drag distance for the slingshot
+      // Variables for sound effects
+      let lastStretchMagnitude = 0; // Track the last stretch magnitude for sound effects
+      let lastStretchSoundTime = 0; // Track when the last stretch sound was played
       let penguinSunk = false; // Flag to track if penguin is sunk in water
       let slowMovementTime = 0; // Track how long the penguin has been moving slowly
       let MAX_SLOW_MOVEMENT_TIME = 2000; // Maximum time in ms to allow slow movement before reset
@@ -1095,6 +1129,18 @@ To modify the game:
         );
         const maxMagnitude = 150; // Maximum drag distance
 
+        // Play stretching sound when the magnitude changes significantly
+        // Only play sound if it's been at least 300ms since the last sound to avoid too many sounds
+        const currentTime = Date.now();
+        if (
+          Math.abs(magnitude - lastStretchMagnitude) > 10 &&
+          currentTime - lastStretchSoundTime > 300
+        ) {
+          playSound("stretch");
+          lastStretchMagnitude = magnitude;
+          lastStretchSoundTime = currentTime;
+        }
+
         // Limit the drag to be mostly to the left and down from the slingshot
         // This ensures proper slingshot behavior
         if (dragDistance.x > 50) {
@@ -1226,6 +1272,9 @@ To modify the game:
 
           console.log("Velocity boosted:", velocity);
         }
+
+        // Play launch sound
+        playSound("launch");
 
         // Hide slingshot bands
         slingshotBandLeft.style.display = "none";
@@ -1651,6 +1700,9 @@ To modify the game:
 
       // Function to create a sinking effect with bubbles when penguin sinks
       function createSinkingEffect(x, y) {
+        // Play sinking sound
+        playSound("sinking");
+
         for (let i = 0; i < 5; i++) {
           const bubble = document.createElement("div");
           bubble.className = "bubble";
@@ -2053,22 +2105,31 @@ To modify the game:
         touchMarker.style.transform = `translate(${x}px, ${y}px)`;
       }
 
+      // Reusable function to play sound effects
+      function playSound(soundType) {
+        // Randomly select between sound variant 1 or 2
+        const soundIndex = Math.random() > 0.5 ? 1 : 2;
+        const sound = document.getElementById(
+          `${soundType}-sound-${soundIndex}`
+        );
+
+        if (sound) {
+          sound.currentTime = 0;
+          sound
+            .play()
+            .catch((e) =>
+              console.log(`Audio play failed for ${soundType}:`, e)
+            );
+        }
+      }
+
       // Function to create multiple explosions for a more dramatic effect
       function createExplosionEffect(x, y) {
         // Create 3-5 explosions at slightly different positions
         const numExplosions = Math.floor(Math.random() * 3) + 3;
 
-        // Play explosion sound
-        const soundIndex = Math.random() > 0.5 ? 1 : 2;
-        const explosionSound = document.getElementById(
-          `explosion-sound-${soundIndex}`
-        );
-        if (explosionSound) {
-          explosionSound.currentTime = 0;
-          explosionSound
-            .play()
-            .catch((e) => console.log("Audio play failed:", e));
-        }
+        // Play explosion sound using our reusable function
+        playSound("explosion");
 
         // Add shake effect to game area
         const gameArea = document.getElementById("game-area");
