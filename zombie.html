@@ -86,7 +86,7 @@ To modify the game:
             position: relative;
             width: 100%;
             height: 100%;
-            background-color: #4682B4; /* Steel blue for sea */
+            background-color: #93dbfc; /* Steel blue for sea */
             overflow: hidden;
         }
         
@@ -104,7 +104,7 @@ To modify the game:
             bottom: 0;
             width: 100%;
             height: 25%;
-            background-color: #87CEEB; /* Light blue for sea surface */
+            background-color: #1a81aa; /* Light blue for sea surface */
             border-bottom: 2px solid #B0E0E6; /* Light blue border */
         }
         
@@ -116,7 +116,7 @@ To modify the game:
             width: 30%;
             height: 45%;
             background-color: #F0F8FF; /* Alice blue for ice structure */
-            border-right: 4px solid #E0FFFF; /* Light cyan border */
+            background-image: linear-gradient(to bottom, #F0F8FF, #B0E0E6);
             z-index: 2;
             display: flex;
             justify-content: center;
@@ -502,9 +502,9 @@ To modify the game:
         
         /* Base damage animation */
         @keyframes baseDamage {
-            0% { background-color: #F0F8FF; }
-            50% { background-color: #FF4500; }
-            100% { background-color: #F0F8FF; }
+            0% { background-image: linear-gradient(to bottom, #F0F8FF, #B0E0E6); }
+            50% { background-image: linear-gradient(to bottom, #F0F8FF, #FF4500); }
+            100% { background-image: linear-gradient(to bottom, #F0F8FF, #B0E0E6); }
         }
         
         .base-damage {
@@ -567,6 +567,33 @@ To modify the game:
 
         #resume-button:active {
             transform: scale(0.9);
+        }
+        
+        .js-penguin-emoji-clone {
+            font-size: 32px;
+            display: inline-block;
+            position: absolute;
+            top: -4px;
+            left: -2px;
+            user-select: none;
+        }
+        
+        .bubble {
+            position: absolute;
+            background-color: rgba(173, 216, 230, 0.7);
+            border-radius: 50%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        /* Some additional styling to make it look better */
+        .penguin-sink {
+            animation: sink 1s ease-out;
+        }
+        
+        @keyframes sink {
+            0% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(20px); }
         }
     </style>
 </head>
@@ -1187,14 +1214,37 @@ To modify the game:
             // Check for ground collision, but only if we're not in gameEnding mode
             // During gameEnding, let the penguin fall through the ground
             if (newY + PENGUIN_RADIUS * 2 > groundY && !gameEnding) {
-                // Ground collision
-                velocity.y = -velocity.y * BOUNCE_FACTOR;
-                currentPos.y = groundY - PENGUIN_RADIUS * 2;
+                // Instead of bouncing, let the penguin sink below the ground
+                // Store that the penguin is now below ground
+                if (!window.penguinSunk) {
+                    window.penguinSunk = true;
+                    console.log("Penguin has sunk below the surface");
+                    
+                    // Apply some damping to the velocity for a more natural sinking effect
+                    velocity.y *= 0.5;
+                    velocity.x *= 0.7;
+                }
                 
-                // Apply extra friction when hitting the ground
-                velocity.x *= FRICTION;
+                // Continue applying physics but with increased resistance
+                currentPos.y = newY;
+                velocity.y *= 0.95; // Slow down vertical velocity more aggressively
+                velocity.x *= 0.9;  // Slow down horizontal velocity more aggressively
+                
+                // Calculate how deep the penguin is below the ground
+                const sinkDepth = currentPos.y + PENGUIN_RADIUS * 2 - groundY;
+                // Calculate opacity based on depth - fade out as it sinks deeper
+                const maxSinkDepth = PENGUIN_RADIUS * 4; // How deep before fully invisible
+                const opacity = Math.max(0, 1 - (sinkDepth / maxSinkDepth));
+                
+                // Apply fading effect
+                penguinClone.style.opacity = opacity.toString();
             } else {
                 currentPos.y = newY;
+                // Reset the sunk flag if penguin is above ground
+                if (window.penguinSunk && newY + PENGUIN_RADIUS * 2 <= groundY) {
+                    window.penguinSunk = false;
+                    penguinClone.style.opacity = '1'; // Reset opacity when above ground
+                }
                 // Apply gravity - increase gravity when game is ending for a faster fall
                 velocity.y += gameEnding ? GRAVITY * 1.5 * timeScale : GRAVITY * timeScale;
             }
@@ -1319,8 +1369,12 @@ To modify the game:
             // Stop animation if penguin is almost stopped
             const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
             
-            // Only stop the penguin if it has actually stopped on the ground
-            const penguinHasStopped = (speed < 0.5 && Math.abs(velocity.y) < 0.5 && currentPos.y + PENGUIN_RADIUS * 2 >= groundY - 1);
+            // Only stop the penguin if it has actually stopped on the ground or it has sunk below the surface
+            const penguinHasStopped = (
+                (speed < 0.5 && Math.abs(velocity.y) < 0.5 && currentPos.y + PENGUIN_RADIUS * 2 >= groundY - 1) || 
+                // Consider the penguin stopped if it has sunk below the ground and is moving slowly
+                (window.penguinSunk && speed < 2.0 && currentPos.y > groundY + PENGUIN_RADIUS)
+            );
             
             // Check if penguin is moving very slowly but not completely stopped
             const isMovingSlowly = (speed < 1.5 && !penguinHasStopped);
@@ -1400,31 +1454,87 @@ To modify the game:
             }
             
             if (penguinHasStopped) {
-                // Penguin has stopped on the ground, add a sinking animation
-                penguinClone.style.transition = 'transform 1s, opacity 1s';
-                penguinClone.style.opacity = '0';
-                penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y + 30}px)`;
-                
-                // Cancel the animation frame
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-                
-                // Remove the clone after the animation completes
-                setTimeout(() => {
-                    if (penguinClone.parentNode) {
-                        penguinClone.parentNode.removeChild(penguinClone);
-                    }
-                    window.activePenguinClone = null;
+                // Check if the penguin has sunk below the ground
+                if (window.penguinSunk) {
+                    // Penguin has sunk - fade out without the upward bounce
+                    penguinClone.style.transition = 'opacity 1s';
+                    penguinClone.style.opacity = '0';
                     
-                    // Reset launch timestamp to allow new launches
-                    penguinLastLaunchedTimestamp = 0;
+                    // Cancel the animation frame
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
                     
-                    // Make original penguin visible again
-                    penguin.style.opacity = '1';
-                }, 1000);
+                    // Create some bubbles or particles for sinking effect
+                    createSinkingEffect(currentPos.x + PENGUIN_RADIUS, currentPos.y);
+                    
+                    // Remove the clone after the animation completes
+                    setTimeout(() => {
+                        if (penguinClone.parentNode) {
+                            penguinClone.parentNode.removeChild(penguinClone);
+                        }
+                        window.activePenguinClone = null;
+                        
+                        // Reset launch timestamp to allow new launches
+                        penguinLastLaunchedTimestamp = 0;
+                        
+                        // Make original penguin visible again
+                        penguin.style.opacity = '1';
+                    }, 1000);
+                } else {
+                    // Penguin has stopped on the ground, add a sinking animation
+                    penguinClone.style.transition = 'transform 1s, opacity 1s';
+                    penguinClone.style.opacity = '0';
+                    penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y + 30}px)`;
+                    
+                    // Cancel the animation frame
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                    
+                    // Remove the clone after the animation completes
+                    setTimeout(() => {
+                        if (penguinClone.parentNode) {
+                            penguinClone.parentNode.removeChild(penguinClone);
+                        }
+                        window.activePenguinClone = null;
+                        
+                        // Reset launch timestamp to allow new launches
+                        penguinLastLaunchedTimestamp = 0;
+                        
+                        // Make original penguin visible again
+                        penguin.style.opacity = '1';
+                    }, 1000);
+                }
             } else {
                 // Continue animation
                 animationFrameId = requestAnimationFrame(updatePhysics);
+            }
+        }
+        
+        // Function to create a sinking effect with bubbles when penguin sinks
+        function createSinkingEffect(x, y) {
+            for (let i = 0; i < 5; i++) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                bubble.style.left = `${x + (Math.random() * 20 - 10)}px`;
+                bubble.style.top = `${y + (Math.random() * 10)}px`;
+                bubble.style.width = `${Math.random() * 10 + 5}px`;
+                bubble.style.height = bubble.style.width;
+                bubble.style.opacity = '0.7';
+                document.getElementById('game-area').appendChild(bubble);
+                
+                // Animate the bubble rising and fading
+                setTimeout(() => {
+                    bubble.style.transition = 'top 1s ease-out, opacity 1s ease-out';
+                    bubble.style.top = `${y - 50 - Math.random() * 20}px`;
+                    bubble.style.opacity = '0';
+                    
+                    // Remove the bubble after animation
+                    setTimeout(() => {
+                        if (bubble.parentNode) {
+                            bubble.parentNode.removeChild(bubble);
+                        }
+                    }, 1000);
+                }, Math.random() * 500);
             }
         }
         
@@ -2186,5 +2296,5 @@ To modify the game:
             }
         }
     </script>
-</body>
+  </body>
 </html>
