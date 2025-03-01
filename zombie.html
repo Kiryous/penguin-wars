@@ -156,7 +156,7 @@ To modify the game:
             position: absolute;
             left: 25%;
             bottom: 45%;
-            width: 15px;
+            width: 10px;
             height: 100px;
             background-color: #8B4513;
             border-radius: 5px 5px 7px 7px;
@@ -168,7 +168,7 @@ To modify the game:
             position: absolute;
             width: 5px;
             height: 60px;
-            background-color: #A52A2A;
+            background-color: wheat;
             transform-origin: 50% 0;
             z-index: 1;
         }
@@ -246,6 +246,7 @@ To modify the game:
             width: 100%;
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
             gap: 10px;
             pointer-events: none;
             padding: 10px;
@@ -287,7 +288,7 @@ To modify the game:
         }
 
         #restart-button:active {
-            transform: translateY(2px) scale(0.98); 
+            transform: scale(0.9); 
         }
         
         #instructions {
@@ -524,7 +525,7 @@ To modify the game:
         }
 
         #pause-button:active {
-            transform: scale(0.98);
+            transform: scale(0.9);
         }
 
         #pause-overlay {
@@ -543,6 +544,7 @@ To modify the game:
 
         #pause-message {
             font-size: 3rem;
+            font-weight: bold;
             color: white;
             text-shadow: 2px 2px 0 #4682B4;
             margin-bottom: 20px;
@@ -553,6 +555,7 @@ To modify the game:
             color: white;
             border: none;
             border-radius: 5px;
+            padding: 10px 20px;
             font-size: 2rem;
             font-weight: bold;
             cursor: pointer;
@@ -560,6 +563,10 @@ To modify the game:
 
         #resume-button:hover {
             background-color: #5692C4;
+        }
+
+        #resume-button:active {
+            transform: scale(0.9);
         }
     </style>
 </head>
@@ -969,8 +976,6 @@ To modify the game:
             };
             
             // Update penguin position
-            //penguin.style.left = `${currentPos.x}px`;
-            //penguin.style.top = `${currentPos.y}px`;
             penguin.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
 
             // Update slingshot bands
@@ -1003,14 +1008,12 @@ To modify the game:
             
             // Update left band
             slingshotBandLeft.style.height = `${leftLength}px`;
-            slingshotBandLeft.style.transform = `rotate(${leftAngle}rad)`;
-            slingshotBandLeft.style.left = `0px`;
+            slingshotBandLeft.style.transform = `translate(0px, 0px) rotate(${leftAngle}rad)`;
             slingshotBandLeft.style.transformOrigin = '0 0';
             
             // Update right band
             slingshotBandRight.style.height = `${rightLength}px`;
-            slingshotBandRight.style.transform = `rotate(${rightAngle}rad)`;
-            slingshotBandRight.style.right = `0px`;
+            slingshotBandRight.style.transform = `translate(0px, 0px) rotate(${rightAngle}rad)`;
             slingshotBandRight.style.transformOrigin = '100% 0';
         }
         
@@ -1357,8 +1360,7 @@ To modify the game:
                 const penguinClone = document.createElement('div');
                 penguinClone.id = 'penguin-clone';
                 penguinClone.style.position = 'absolute';
-                penguinClone.style.left = `${waitingPenguinRect.left}px`;
-                penguinClone.style.top = `${waitingPenguinRect.top}px`;
+                penguinClone.style.transform = `translate(${waitingPenguinRect.left}px, ${waitingPenguinRect.top}px)`;
                 penguinClone.style.transition = 'all 0.5s ease-in-out';
                 penguinClone.style.zIndex = '5';
                 penguinClone.style.fontSize = '35px';
@@ -1377,8 +1379,7 @@ To modify the game:
                 
                 // Animate the clone to the slingshot position
                 setTimeout(() => {
-                    penguinClone.style.left = `${restPosition.x}px`;
-                    penguinClone.style.top = `${restPosition.y}px`;
+                    penguinClone.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
                 }, 50);
                 
                 // After animation completes, reset the penguin
@@ -1492,8 +1493,6 @@ To modify the game:
             
             // Only update penguin position if it's not launched
             if (!penguinLastLaunchedTimestamp) {
-                //penguin.style.left = `${restPosition.x}px`;
-                //penguin.style.top = `${restPosition.y}px`;
                 penguin.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
                 currentPos = { x: restPosition.x, y: restPosition.y };
             }
@@ -1531,8 +1530,7 @@ To modify the game:
                     }
                     
                     // Update enemy position
-                    enemy.element.style.left = `${newX}px`;
-                    enemy.element.style.top = `${newY}px`;
+                    enemy.element.style.transform = `translate(${newX}px, ${newY}px)`;
                     enemy.position = { x: newX, y: newY };
                 }
             });
@@ -1548,8 +1546,6 @@ To modify the game:
             };
             
             // Reset penguin position to the slingshot
-            //penguin.style.left = `${restPosition.x}px`;
-            //penguin.style.top = `${restPosition.y}px`;
             penguin.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
             
             // Reset physics variables
@@ -1671,7 +1667,7 @@ To modify the game:
                     Penguin State: ${penguinLastLaunchedTimestamp ? 'Launched' : 'Ready'}<br>
                     Enemies Left: ${enemiesInWave}/${enemies.length}<br>
                     Current Level: ${currentLevel} (${DIFFICULTY_LEVELS[currentDifficulty].name})<br>
-                    Touch Position: (${touchMarker.style.left}, ${touchMarker.style.top})
+                    Touch Position: (${touchMarker.getBoundingClientRect().left.toFixed(0)}, ${touchMarker.getBoundingClientRect().top.toFixed(0)})
                 `;
                 
                 debugPanel.innerHTML = debugInfo;
@@ -1684,8 +1680,7 @@ To modify the game:
         function updateTouchMarker(x, y) {
             // Only show touch marker if debug mode is active
             touchMarker.style.display = debugMode ? 'block' : 'none';
-            touchMarker.style.left = `${x}px`;
-            touchMarker.style.top = `${y}px`;
+            touchMarker.style.transform = `translate(${x}px, ${y}px)`;
         }
         
         // Function to create multiple explosions for a more dramatic effect
@@ -1741,14 +1736,14 @@ To modify the game:
                 explosion.className = 'explosion';
                 explosion.textContent = '💥';
                 explosion.style.fontSize = `${size}px`;
-                explosion.style.left = `${x + offsetX - size/2}px`;
-                explosion.style.top = `${y + offsetY - size/2}px`;
+                explosion.style.transform = `translate(${x + offsetX - size/2}px, ${y + offsetY - size/2}px)`;
                 document.getElementById('game-area').appendChild(explosion);
                 
                 // Trigger explosion animation with delay
                 setTimeout(() => {
                     explosion.classList.add('active');
-                    explosion.style.transform = `scale(2.0) rotate(${rotation}deg)`;
+                    // Preserve the translation when setting scale and rotation
+                    explosion.style.transform = `translate(${x + offsetX - size/2}px, ${y + offsetY - size/2}px) scale(2.0) rotate(${rotation}deg)`;
                 }, delay);
                 
                 // Remove explosion after animation completes
@@ -1783,8 +1778,7 @@ To modify the game:
             particle.style.height = '8px';
             particle.style.borderRadius = '50%';
             particle.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-            particle.style.left = `${x}px`;
-            particle.style.top = `${y}px`;
+            particle.style.transform = `translate(${x}px, ${y}px)`;
             particle.style.zIndex = '100';
             particle.style.transition = 'all 0.8s ease-out';
             
@@ -1792,7 +1786,7 @@ To modify the game:
             
             // Animate the particle
             setTimeout(() => {
-                particle.style.transform = `translate(${(Math.random() - 0.5) * 30}px, ${Math.random() * 50}px)`;
+                particle.style.transform = `translate(${x + (Math.random() - 0.5) * 30}px, ${y + Math.random() * 50}px)`;
                 particle.style.opacity = '0';
             }, 10);
             
@@ -1924,8 +1918,7 @@ To modify the game:
             // Random y position within sea + 100px above
             const y = spawnAreaTop + Math.random() * spawnAreaHeight;
             
-            enemyElement.style.left = `${x}px`;
-            enemyElement.style.top = `${y}px`;
+            enemyElement.style.transform = `translate(${x}px, ${y}px)`;
             
             // Add to game area
             gameArea.appendChild(enemyElement);
@@ -1982,7 +1975,7 @@ To modify the game:
                     enemy.position.x -= enemy.speed * timeScale;
                     
                     // Update enemy position
-                    enemy.element.style.left = `${enemy.position.x}px`;
+                    enemy.element.style.transform = `translate(${enemy.position.x}px, ${enemy.position.y}px)`;
                     
                     // Check if enemy has reached the base
                     if (enemy.position.x <= baseRect.right) {
