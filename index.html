@@ -811,6 +811,7 @@ To modify the game:
       let waveInProgress = false; // Flag to track if a wave is in progress
       let enemySpawnInterval = null; // Interval for spawning enemies
       let activePenguinClone = null; // Active penguin clone being launched
+      let penguinCloneCount = 0; // Number of penguin clones
       let lastDragDistance = null; // Last drag distance for the slingshot
       let penguinSunk = false; // Flag to track if penguin is sunk in water
       let slowMovementTime = 0; // Track how long the penguin has been moving slowly
@@ -823,7 +824,7 @@ To modify the game:
       const FRICTION = 0.98;
       const PENGUIN_RADIUS = 20;
       const ENEMY_RADIUS = 17.5;
-      const ELASTICITY = 8;
+      const ELASTICITY = 15;
       const MIN_EXPLOSION_SPEED = 8; // Minimum speed required for enemies to explode
       const BASE_DAMAGE_PER_ENEMY = 10; // Damage each enemy deals to the base
 
@@ -1004,9 +1005,7 @@ To modify the game:
       function clearEnemies() {
         // Remove all enemy elements from the DOM
         enemies.forEach((enemy) => {
-          if (enemy.element && enemy.element.parentNode) {
-            enemy.element.parentNode.removeChild(enemy.element);
-          }
+          enemy.element.remove();
         });
         enemies = [];
 
@@ -1197,12 +1196,12 @@ To modify the game:
         console.log("Pull distance:", pullDistance);
 
         // Only launch if the pull distance is significant enough
-        // if (pullDistance < 5) {
-        //     // Pull distance too small, reset penguin without launching
-        //     console.log("Launch canceled: Pull distance too small");
-        //     resetPenguin();
-        //     return;
-        // }
+        if (pullDistance < 5) {
+          // Pull distance too small, reset penguin without launching
+          console.log("Launch canceled: Pull distance too small");
+          resetPenguin();
+          return;
+        }
 
         const powerFactor = Math.min(pullDistance / 50, 3); // Cap the power factor
 
@@ -1234,6 +1233,8 @@ To modify the game:
 
         // CHANGE: Clone the penguin for launch
         const penguinClone = document.createElement("div");
+        penguinClone.id = "penguin-clone" + penguinCloneCount;
+        penguinCloneCount++;
         penguinClone.className = "js-penguin-clone";
         penguinClone.style.position = "absolute";
         penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
@@ -1291,8 +1292,9 @@ To modify the game:
         const timeScale = deltaTime / 16; // Normalized to 60fps
 
         // Get the active penguin clone
-        const penguinClone = activePenguinClone;
-        if (!penguinClone) {
+        const penguinClones = document.querySelectorAll(".js-penguin-clone");
+        penguinClone = penguinClones[penguinClones.length - 1];
+        if (penguinClones.length === 0) {
           // No active clone, cancel animation
           console.log("No active penguin clone found, cancelling physics");
           cancelAnimationFrame(animationFrameId);
@@ -1338,7 +1340,7 @@ To modify the game:
           currentPos.x = newX;
         }
 
-        const sunkLineY = groundY - PENGUIN_RADIUS * 2;
+        const sunkLineY = groundY - 100;
         // Check for ground collision, but only if we're not in gameEnding mode
         // During gameEnding, let the penguin fall through the ground
         if (newY + PENGUIN_RADIUS > sunkLineY && !gameEnding) {
@@ -1453,6 +1455,10 @@ To modify the game:
                 // Create explosion effects at the enemy's position
                 createExplosionEffect(enemyCenterX, enemyCenterY);
 
+                // reset the sunk flag because the penguin hit the enemy
+                // TODO: more robust solution
+                penguinSunk = false;
+
                 // Hide the enemy
                 enemy.element.style.opacity = "0";
 
@@ -1485,9 +1491,7 @@ To modify the game:
 
         if (penguinOffScreen && !gameEnding) {
           // Penguin has gone off screen, remove the clone
-          if (penguinClone.parentNode) {
-            penguinClone.parentNode.removeChild(penguinClone);
-          }
+          penguinClone.remove();
           activePenguinClone = null;
 
           cancelAnimationFrame(animationFrameId);
@@ -1527,9 +1531,7 @@ To modify the game:
 
         // If penguin is almost static and not on the ground, remove it
         if (isAlmostStatic && currentPos.y + PENGUIN_RADIUS * 2 < groundY - 5) {
-          if (penguinClone.parentNode) {
-            penguinClone.parentNode.removeChild(penguinClone);
-          }
+          penguinClone.remove();
           activePenguinClone = null;
 
           cancelAnimationFrame(animationFrameId);
@@ -1553,9 +1555,7 @@ To modify the game:
 
           // If penguin has been moving slowly for too long, remove it
           if (slowMovementTime > MAX_SLOW_MOVEMENT_TIME) {
-            if (penguinClone.parentNode) {
-              penguinClone.parentNode.removeChild(penguinClone);
-            }
+            penguinClone.remove();
             activePenguinClone = null;
 
             cancelAnimationFrame(animationFrameId);
@@ -1582,9 +1582,7 @@ To modify the game:
 
         if (timeSinceLastLaunch > RESET_IN_FROM_LAUNCH) {
           // Penguin has been idle for more than 1 second, remove it
-          if (penguinClone.parentNode) {
-            penguinClone.parentNode.removeChild(penguinClone);
-          }
+          penguinClone.remove();
           activePenguinClone = null;
 
           cancelAnimationFrame(animationFrameId);
@@ -1613,9 +1611,7 @@ To modify the game:
 
           // Remove the clone after the animation completes
           setTimeout(() => {
-            if (penguinClone.parentNode) {
-              penguinClone.parentNode.removeChild(penguinClone);
-            }
+            penguinClone.remove();
             activePenguinClone = null;
 
             // Reset launch timestamp to allow new launches
@@ -1638,9 +1634,7 @@ To modify the game:
 
           // Remove the clone after the animation completes
           setTimeout(() => {
-            if (penguinClone.parentNode) {
-              penguinClone.parentNode.removeChild(penguinClone);
-            }
+            penguinClone.remove();
             activePenguinClone = null;
 
             // Reset launch timestamp to allow new launches
@@ -1675,9 +1669,7 @@ To modify the game:
 
             // Remove the bubble after animation
             setTimeout(() => {
-              if (bubble.parentNode) {
-                bubble.parentNode.removeChild(bubble);
-              }
+              bubble.remove();
             }, 1000);
           }, Math.random() * 500);
         }
@@ -1731,9 +1723,7 @@ To modify the game:
           // After animation completes, reset the penguin
           setTimeout(() => {
             // Remove the clone
-            if (penguinClone.parentNode) {
-              penguinClone.parentNode.removeChild(penguinClone);
-            }
+            penguinClone.remove();
 
             // Reset penguin
             resetPenguin();
@@ -1938,6 +1928,7 @@ To modify the game:
         const penguinClones = document.querySelectorAll(".js-penguin-clone");
         penguinClones.forEach((penguinClone) => {
           penguinClone.remove();
+          penguinCloneCount--;
         });
       }
 
@@ -2137,9 +2128,7 @@ To modify the game:
 
           // Remove explosion after animation completes
           setTimeout(() => {
-            if (explosion.parentNode) {
-              explosion.parentNode.removeChild(explosion);
-            }
+            explosion.remove();
           }, delay + 600);
         }
       }
@@ -2183,9 +2172,7 @@ To modify the game:
 
         // Remove the particle after animation
         setTimeout(() => {
-          if (particle.parentNode) {
-            particle.parentNode.removeChild(particle);
-          }
+          particle.remove();
         }, 800);
       }
 
