@@ -1085,6 +1085,32 @@ To modify the game:
             slingshotBandLeft.style.display = 'none';
             slingshotBandRight.style.display = 'none';
             
+            // CHANGE: Clone the penguin for launch
+            const penguinClone = document.createElement('div');
+            penguinClone.id = 'penguin-clone';
+            penguinClone.style.position = 'absolute';
+            penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
+            penguinClone.style.zIndex = '3';
+            penguinClone.style.fontSize = penguin.style.fontSize || '40px';
+            
+            // Copy the penguin emoji and its facing direction
+            const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
+            const penguinCloneEmoji = document.createElement('div');
+            penguinCloneEmoji.className = penguinEmoji.className;
+            penguinCloneEmoji.textContent = penguinEmoji.textContent;
+            penguinCloneEmoji.classList.add('js-penguin-emoji-clone');
+            penguinClone.appendChild(penguinCloneEmoji);
+            
+            document.getElementById('game-area').appendChild(penguinClone);
+            
+            // Reset the original penguin back to the slingshot but make it invisible
+            penguin.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
+            penguin.style.opacity = '0'; // Hide the original penguin
+            currentPos = { x: restPosition.x, y: restPosition.y };
+            
+            // Store the active penguin clone in a global variable
+            window.activePenguinClone = penguinClone;
+            
             // Start physics simulation
             penguinLastLaunchedTimestamp = performance.now();
             penguinLastTimestamp = performance.now(); // Use penguin-specific timestamp
@@ -1111,6 +1137,16 @@ To modify the game:
 
             // Scale time factor to keep physics consistent regardless of frame rate
             const timeScale = deltaTime / 16; // Normalized to 60fps
+            
+            // Get the active penguin clone
+            const penguinClone = window.activePenguinClone;
+            if (!penguinClone) {
+                // No active clone, cancel animation
+                console.log("No active penguin clone found, cancelling physics");
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                return;
+            }
             
             // Update position based on velocity
             const newX = currentPos.x + velocity.x * timeScale;
@@ -1166,21 +1202,19 @@ To modify the game:
             // Apply friction to slow down the penguin
             velocity.x *= FRICTION;
             
-            // Update penguin position
-            //penguin.style.left = `${currentPos.x}px`;
-            //penguin.style.top = `${currentPos.y}px`;
-            penguin.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
+            // Update penguin clone position
+            penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
             
-            // If game is ending, make sure penguin is visible above the overlay
+            // If game is ending, make sure penguin clone is visible above the overlay
             if (gameEnding) {
-                penguin.style.zIndex = "101";
+                penguinClone.style.zIndex = "101";
                 // Add a trail effect during game ending for more visual impact
                 createFallingTrail(currentPos.x + PENGUIN_RADIUS, currentPos.y + PENGUIN_RADIUS);
             } else {
-                penguin.style.zIndex = "3"; // Reset to original z-index
+                penguinClone.style.zIndex = "3"; // Reset to original z-index
             }
             
-            const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
+            const penguinEmoji = penguinClone.querySelector('.js-penguin-emoji-clone');
             
             // Update penguin facing direction based on velocity
             const previousFacingRight = penguinEmoji.classList.contains('face-right');
@@ -1254,21 +1288,31 @@ To modify the game:
             });
             
             // Check if penguin has gone off screen
-            const pengiunOffScreen = (
+            const penguinOffScreen = (
                 currentPos.y < -PENGUIN_RADIUS * 4 || // Too far above
                 currentPos.y > gameRect.height + PENGUIN_RADIUS * 2 || // Too far below
                 currentPos.x < -PENGUIN_RADIUS * 4 || // Too far to the left
                 currentPos.x > gameRect.width + PENGUIN_RADIUS * 4 // Too far to the right
             );
             
-            if (pengiunOffScreen && !gameEnding) {
-                // Penguin has gone off screen, reset it
+            if (penguinOffScreen && !gameEnding) {
+                // Penguin has gone off screen, remove the clone
+                if (penguinClone.parentNode) {
+                    penguinClone.parentNode.removeChild(penguinClone);
+                }
+                window.activePenguinClone = null;
+                
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
                 if (debugMode) {
-                    console.log("Penguin reset: Off screen");
+                    console.log("Penguin clone removed: Off screen");
                 }
-                resetPenguin();
+                
+                // Reset launch timestamp to allow new launches
+                penguinLastLaunchedTimestamp = 0;
+                
+                // Make original penguin visible again
+                penguin.style.opacity = '1';
                 return;
             }
             
@@ -1284,15 +1328,25 @@ To modify the game:
             // Check if penguin is barely moving at all (almost static)
             const isAlmostStatic = (speed < 0.2);
             
-            // If penguin is almost static and not on the ground, force a reset
+            // If penguin is almost static and not on the ground, remove it
             if (isAlmostStatic && currentPos.y + PENGUIN_RADIUS * 2 < groundY - 5) {
+                if (penguinClone.parentNode) {
+                    penguinClone.parentNode.removeChild(penguinClone);
+                }
+                window.activePenguinClone = null;
+                
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
                 if (debugMode) {
-                    console.log("Penguin reset: Almost static in mid-air");
+                    console.log("Penguin clone removed: Almost static in mid-air");
                 }
-                resetPenguin();
+                
+                // Reset launch timestamp to allow new launches
+                penguinLastLaunchedTimestamp = 0;
                 slowMovementTime = 0;
+                
+                // Make original penguin visible again
+                penguin.style.opacity = '1';
                 return;
             }
             
@@ -1300,15 +1354,25 @@ To modify the game:
                 // Increment the slow movement timer
                 slowMovementTime += deltaTime;
                 
-                // If penguin has been moving slowly for too long, reset it
+                // If penguin has been moving slowly for too long, remove it
                 if (slowMovementTime > MAX_SLOW_MOVEMENT_TIME) {
+                    if (penguinClone.parentNode) {
+                        penguinClone.parentNode.removeChild(penguinClone);
+                    }
+                    window.activePenguinClone = null;
+                    
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = null;
                     if (debugMode) {
-                        console.log("Penguin reset: Moving slowly for too long");
+                        console.log("Penguin clone removed: Moving slowly for too long");
                     }
-                    resetPenguin();
+                    
+                    // Reset launch timestamp to allow new launches
+                    penguinLastLaunchedTimestamp = 0;
                     slowMovementTime = 0;
+                    
+                    // Make original penguin visible again
+                    penguin.style.opacity = '1';
                     return;
                 }
             } else {
@@ -1319,21 +1383,45 @@ To modify the game:
             const timeSinceLastLaunch = performance.now() - penguinLastLaunchedTimestamp;
 
             if (timeSinceLastLaunch > RESET_IN_FROM_LAUNCH) {
-                // Penguin has been idle for more than 1 second, reset it
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-                resetPenguin();
-            }
-            
-            if (penguinHasStopped) {
-                // Penguin has stopped on the ground
+                // Penguin has been idle for more than 1 second, remove it
+                if (penguinClone.parentNode) {
+                    penguinClone.parentNode.removeChild(penguinClone);
+                }
+                window.activePenguinClone = null;
+                
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
                 
-                // Reset penguin for next launch
+                // Reset launch timestamp to allow new launches
+                penguinLastLaunchedTimestamp = 0;
+                
+                // Make original penguin visible again
+                penguin.style.opacity = '1';
+            }
+            
+            if (penguinHasStopped) {
+                // Penguin has stopped on the ground, add a sinking animation
+                penguinClone.style.transition = 'transform 1s, opacity 1s';
+                penguinClone.style.opacity = '0';
+                penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y + 30}px)`;
+                
+                // Cancel the animation frame
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                
+                // Remove the clone after the animation completes
                 setTimeout(() => {
-                    resetPenguin();
-                }, 500);
+                    if (penguinClone.parentNode) {
+                        penguinClone.parentNode.removeChild(penguinClone);
+                    }
+                    window.activePenguinClone = null;
+                    
+                    // Reset launch timestamp to allow new launches
+                    penguinLastLaunchedTimestamp = 0;
+                    
+                    // Make original penguin visible again
+                    penguin.style.opacity = '1';
+                }, 1000);
             } else {
                 // Continue animation
                 animationFrameId = requestAnimationFrame(updatePhysics);
@@ -1548,6 +1636,9 @@ To modify the game:
             // Reset penguin position to the slingshot
             penguin.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
             
+            // Make penguin visible again
+            penguin.style.opacity = '1';
+            
             // Reset physics variables
             currentPos = { x: restPosition.x, y: restPosition.y };
             velocity = { x: 0, y: 0 };
@@ -1558,13 +1649,13 @@ To modify the game:
             window.lastDragDistance = null;
             
             const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
-            // Make sure enemy is facing right at reset
+            // Make sure penguin is facing right at reset
             penguinEmoji.classList.add('face-right');
             
-            // Add animation to the enemy in the slingshot
+            // Add animation to the penguin in the slingshot
             penguin.classList.add('slingshot-penguin-animate');
             
-            // Update favicon to match enemy direction
+            // Update favicon to match penguin direction
             updateFaviconDirection();
             
             // Hide slingshot bands and touch marker
@@ -1576,6 +1667,12 @@ To modify the game:
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
+            }
+            
+            // Remove any active penguin clone
+            if (window.activePenguinClone && window.activePenguinClone.parentNode) {
+                window.activePenguinClone.parentNode.removeChild(window.activePenguinClone);
+                window.activePenguinClone = null;
             }
         }
         
