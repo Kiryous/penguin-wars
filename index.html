@@ -723,10 +723,9 @@ To modify the game:
         let enemiesInWave = BASE_ENEMIES; // Number of enemies in current wave
         let waveInProgress = false; // Flag to track if a wave is in progress
         let enemySpawnInterval = null; // Interval for spawning enemies
-        let enemySpeed = BASE_ENEMY_SPEED; // Base speed for enemies - increased from 0.5 to 0.7
-        let gameOver = false;
-        let gameEnding = false; // Flag to indicate the game is ending but not yet over
-        let faviconLink; // Link element for favicon
+        let activePenguinClone = null; // Active penguin clone being launched
+        let lastDragDistance = null; // Last drag distance for the slingshot
+        let penguinSunk = false; // Flag to track if penguin is sunk in water
         let slowMovementTime = 0; // Track how long the penguin has been moving slowly
         let MAX_SLOW_MOVEMENT_TIME = 2000; // Maximum time in ms to allow slow movement before reset
         let gamePaused = false; // Flag to track if the game is paused
@@ -948,7 +947,7 @@ To modify the game:
             const slingshotCenterX = slingshotRect.left + slingshotRect.width / 2;
             const slingshotTopY = slingshotRect.top;
             
-            window.lastDragDistance = {
+            lastDragDistance = {
                 x: touchX - slingshotCenterX,
                 y: touchY - slingshotTopY
             };
@@ -1005,7 +1004,7 @@ To modify the game:
             updateSlingshotBands(currentPos.x + PENGUIN_RADIUS, currentPos.y + PENGUIN_RADIUS);
             
             // Store the drag distance for use in endDrag
-            window.lastDragDistance = dragDistance;
+            lastDragDistance = dragDistance;
         }
         
         function updateSlingshotBands(penguinX, penguinY) {
@@ -1055,8 +1054,8 @@ To modify the game:
             
             // Use the stored drag distance if available, otherwise calculate it
             let dragDistance;
-            if (window.lastDragDistance) {
-                dragDistance = window.lastDragDistance;
+            if (lastDragDistance) {
+                dragDistance = lastDragDistance;
                 console.log("Using stored drag distance:", dragDistance);
             } else {
                 dragDistance = {
@@ -1132,7 +1131,7 @@ To modify the game:
             currentPos = { x: restPosition.x, y: restPosition.y };
             
             // Store the active penguin clone in a global variable
-            window.activePenguinClone = penguinClone;
+            activePenguinClone = penguinClone;
             
             // Start physics simulation
             penguinLastLaunchedTimestamp = performance.now();
@@ -1142,7 +1141,7 @@ To modify the game:
             console.log("Physics simulation started, t=" + penguinLastTimestamp);
             
             // Clear the stored drag distance
-            window.lastDragDistance = null;
+            lastDragDistance = null;
         }
         
         function updatePhysics(timestamp) {
@@ -1162,7 +1161,7 @@ To modify the game:
             const timeScale = deltaTime / 16; // Normalized to 60fps
             
             // Get the active penguin clone
-            const penguinClone = window.activePenguinClone;
+            const penguinClone = activePenguinClone;
             if (!penguinClone) {
                 // No active clone, cancel animation
                 console.log("No active penguin clone found, cancelling physics");
@@ -1207,13 +1206,14 @@ To modify the game:
                 currentPos.x = newX;
             }
             
+            const sunkLineY = groundY - PENGUIN_RADIUS * 2;
             // Check for ground collision, but only if we're not in gameEnding mode
             // During gameEnding, let the penguin fall through the ground
-            if (newY + PENGUIN_RADIUS * 2 > groundY && !gameEnding) {
+            if (newY + PENGUIN_RADIUS > sunkLineY && !gameEnding) {
                 // Instead of bouncing, let the penguin sink below the ground
                 // Store that the penguin is now below ground
-                if (!window.penguinSunk) {
-                    window.penguinSunk = true;
+                if (!penguinSunk) {
+                    penguinSunk = true;
                     console.log("Penguin has sunk below the surface");
                     
                     // Apply some damping to the velocity for a more natural sinking effect
@@ -1237,8 +1237,8 @@ To modify the game:
             } else {
                 currentPos.y = newY;
                 // Reset the sunk flag if penguin is above ground
-                if (window.penguinSunk && newY + PENGUIN_RADIUS * 2 <= groundY) {
-                    window.penguinSunk = false;
+                if (penguinSunk && newY + PENGUIN_RADIUS * 2 <= groundY) {
+                    penguinSunk = false;
                     penguinClone.style.opacity = '1'; // Reset opacity when above ground
                 }
                 // Apply gravity - increase gravity when game is ending for a faster fall
@@ -1346,7 +1346,7 @@ To modify the game:
                 if (penguinClone.parentNode) {
                     penguinClone.parentNode.removeChild(penguinClone);
                 }
-                window.activePenguinClone = null;
+                activePenguinClone = null;
                 
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -1369,7 +1369,7 @@ To modify the game:
             const penguinHasStopped = (
                 (speed < 0.5 && Math.abs(velocity.y) < 0.5 && currentPos.y + PENGUIN_RADIUS * 2 >= groundY - 1) || 
                 // Consider the penguin stopped if it has sunk below the ground and is moving slowly
-                (window.penguinSunk && speed < 2.0 && currentPos.y > groundY + PENGUIN_RADIUS)
+                (penguinSunk && speed < 2.0 && currentPos.y > groundY + PENGUIN_RADIUS)
             );
             
             // Check if penguin is moving very slowly but not completely stopped
@@ -1383,7 +1383,7 @@ To modify the game:
                 if (penguinClone.parentNode) {
                     penguinClone.parentNode.removeChild(penguinClone);
                 }
-                window.activePenguinClone = null;
+                activePenguinClone = null;
                 
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -1409,7 +1409,7 @@ To modify the game:
                     if (penguinClone.parentNode) {
                         penguinClone.parentNode.removeChild(penguinClone);
                     }
-                    window.activePenguinClone = null;
+                    activePenguinClone = null;
                     
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = null;
@@ -1437,7 +1437,7 @@ To modify the game:
                 if (penguinClone.parentNode) {
                     penguinClone.parentNode.removeChild(penguinClone);
                 }
-                window.activePenguinClone = null;
+                activePenguinClone = null;
                 
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -1449,17 +1449,18 @@ To modify the game:
                 penguin.style.opacity = '1';
             }
             
-            if (penguinHasStopped) {
                 // Check if the penguin has sunk below the ground
-                if (window.penguinSunk) {
+                if (penguinSunk) {
                     // Penguin has sunk - fade out without the upward bounce
                     penguinClone.style.transition = 'opacity 1s';
                     penguinClone.style.opacity = '0';
                     
+
                     // Cancel the animation frame
                     cancelAnimationFrame(animationFrameId);
+
                     animationFrameId = null;
-                    
+
                     // Create some bubbles or particles for sinking effect
                     createSinkingEffect(currentPos.x + PENGUIN_RADIUS, currentPos.y);
                     
@@ -1468,7 +1469,7 @@ To modify the game:
                         if (penguinClone.parentNode) {
                             penguinClone.parentNode.removeChild(penguinClone);
                         }
-                        window.activePenguinClone = null;
+                        activePenguinClone = null;
                         
                         // Reset launch timestamp to allow new launches
                         penguinLastLaunchedTimestamp = 0;
@@ -1476,7 +1477,7 @@ To modify the game:
                         // Make original penguin visible again
                         penguin.style.opacity = '1';
                     }, 1000);
-                } else {
+                } else if (penguinHasStopped) {
                     // Penguin has stopped on the ground, add a sinking animation
                     penguinClone.style.transition = 'transform 1s, opacity 1s';
                     penguinClone.style.opacity = '0';
@@ -1491,7 +1492,7 @@ To modify the game:
                         if (penguinClone.parentNode) {
                             penguinClone.parentNode.removeChild(penguinClone);
                         }
-                        window.activePenguinClone = null;
+                        activePenguinClone = null;
                         
                         // Reset launch timestamp to allow new launches
                         penguinLastLaunchedTimestamp = 0;
@@ -1500,10 +1501,8 @@ To modify the game:
                         penguin.style.opacity = '1';
                     }, 1000);
                 }
-            } else {
                 // Continue animation
                 animationFrameId = requestAnimationFrame(updatePhysics);
-            }
         }
         
         // Function to create a sinking effect with bubbles when penguin sinks
@@ -1752,7 +1751,7 @@ To modify the game:
             slowMovementTime = 0; // Reset slow movement timer
             
             // Clear any stored drag distance
-            window.lastDragDistance = null;
+            lastDragDistance = null;
             
             const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
             // Make sure penguin is facing right at reset
@@ -1776,9 +1775,9 @@ To modify the game:
             }
             
             // Remove any active penguin clone
-            if (window.activePenguinClone && window.activePenguinClone.parentNode) {
-                window.activePenguinClone.parentNode.removeChild(window.activePenguinClone);
-                window.activePenguinClone = null;
+            if (activePenguinClone && activePenguinClone.parentNode) {
+                activePenguinClone.parentNode.removeChild(activePenguinClone);
+                activePenguinClone = null;
             }
         }
         
