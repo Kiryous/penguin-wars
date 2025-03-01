@@ -45,8 +45,7 @@ Game Structure:
 To modify the game:
 - Change the emoji in the HTML to alter characters
 - Adjust physics constants (GRAVITY, BOUNCE_FACTOR, etc.) for different feel
-- Modify pig positions in createPigs() to change level layout
-- Edit CSS for visual changes to game elements
+- Edit CSS for visual changes to game elements  
 -->
 
 <!DOCTYPE html>
@@ -86,7 +85,7 @@ To modify the game:
             position: relative;
             width: 100%;
             height: 100%;
-            background-color: #93dbfc; /* Steel blue for sea */
+            background-image: linear-gradient(125deg, #31688B, #AABCBD);
             overflow: hidden;
         }
         
@@ -105,7 +104,7 @@ To modify the game:
             width: 100%;
             height: 25%;
             background-color: #1a81aa; /* Light blue for sea surface */
-            border-bottom: 2px solid #B0E0E6; /* Light blue border */
+            background-image: radial-gradient(circle, #06273D, #046183);
         }
         
         /* Base structure on the left side */
@@ -114,13 +113,41 @@ To modify the game:
             left: 0;
             bottom: 0%;
             width: 30%;
-            height: 45%;
+            height: 50%;
+            z-index: 2;
+            background-color: greenyellow;
+        }
+
+        #base::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 65%;
+            background-color: #F0F8FF; /* Alice blue for ice structure */
+            background-image: linear-gradient(to bottom, #F0F8FF, #B0E0E6);
+            border-radius: 50px;
+            transform: rotate(25deg);
+            margin-left: -80px;
+        }
+
+        #base::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 120%;
+            height: 75%;
             background-color: #F0F8FF; /* Alice blue for ice structure */
             background-image: linear-gradient(to bottom, #F0F8FF, #B0E0E6);
             z-index: 2;
             display: flex;
             justify-content: center;
             align-items: end;
+            border-radius: 50px;
+            transform: rotate(-17deg);
+            margin-bottom: -120px;
         }
         
         /* Health bar container */
@@ -154,11 +181,12 @@ To modify the game:
         
         #slingshot {
             position: absolute;
-            left: 25%;
-            bottom: 45%;
+            left: 27%;
+            bottom: 20%;
             width: 10px;
             height: 100px;
             background-color: #8B4513;
+            background-image: linear-gradient(to left, #8B4513 0%, #c96c2a 50%, #8B4513 100%);
             border-radius: 5px 5px 7px 7px;
             z-index: 2;
             transform: translateY(10px);
@@ -208,16 +236,8 @@ To modify the game:
             user-select: none;
             -webkit-user-select: none;
             z-index: 2;
-            transition: transform 0.2s ease-in-out;
-        }
-        
-        .pig {
-            position: absolute;
-            font-size: 52.5px;
-            user-select: none;
-            -webkit-user-select: none;
-            z-index: 2;
-            transform-origin: center center;
+            transition: transform 100ms ease-in-out;
+            background-color: greenyellow;
         }
         
         .explosion {
@@ -278,25 +298,15 @@ To modify the game:
         }
         
         #restart-button {
-            padding: 0 10px;
             border: none;
-            border-radius: 5px;
             cursor: pointer;
             z-index: 10;
-            font-size: 2rem;
+            font-size: 2.5rem;
             background-color: transparent;
         }
 
         #restart-button:active {
             transform: scale(0.9); 
-        }
-        
-        #instructions {
-            max-width: 400px;
-            padding: 10px;
-            border-radius: 10px;
-            font-size: 14px;
-            z-index: 10;
         }
         
         #debug-toggle {
@@ -364,8 +374,8 @@ To modify the game:
         #waiting-penguin {
             position: absolute;
             font-size: 35px;
-            left: 15%;
-            bottom: 45%;
+            left: 18%;
+            bottom: 20%;
             user-select: none;
             -webkit-user-select: none;
             z-index: 2;
@@ -507,20 +517,17 @@ To modify the game:
             100% { background-image: linear-gradient(to bottom, #F0F8FF, #B0E0E6); }
         }
         
-        .base-damage {
+        .base-damage::before, .base-damage::after {
             animation: baseDamage 0.5s ease-in-out;
         }
 
-        /* Add CSS for pause button and overlay right after the game-over-overlay CSS */
         #pause-button {
-            padding: 0 10px;
             background-color: transparent;
             color: white;
             border: none;
-            border-radius: 5px;
             cursor: pointer;
             z-index: 10;
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: bold;
         }
 
@@ -603,11 +610,6 @@ To modify the game:
             <div id="sea"></div>
             <div id="ground"></div>
             <div id="base">
-                <div id="instructions">
-                    Drag the penguin back, then release to launch!<br>
-                    Stop the sea invaders before they reach your base.<br>
-                    Your base has 100 health. Each enemy that reaches it deals 10 damage.
-                </div>
             </div>
             <div id="slingshot">
                 <div id="slingshot-band-left"></div>
@@ -701,7 +703,7 @@ To modify the game:
         let slingshot;
         let slingshotBandLeft;
         let slingshotBandRight;
-        let enemies = []; // Renamed from pigs to enemies
+        let enemies = [];
         let score = 0;
         let penguinLastLaunchedTimestamp = false;
         let isDragging = false;
@@ -734,8 +736,8 @@ To modify the game:
         const BOUNCE_FACTOR = 0.7;
         const FRICTION = 0.98;
         const PENGUIN_RADIUS = 20;
-        const ENEMY_RADIUS = 17.5; // Renamed from PIG_RADIUS
-        const ELASTICITY = 8; // Reduced from 10 to 8 for more powerful launches
+        const ENEMY_RADIUS = 17.5;
+        const ELASTICITY = 8;
         const MIN_EXPLOSION_SPEED = 8; // Minimum speed required for enemies to explode
         const BASE_DAMAGE_PER_ENEMY = 10; // Damage each enemy deals to the base
         
@@ -837,14 +839,12 @@ To modify the game:
             // Add global event listeners for mouse/touch release
             // This ensures the penguin is launched even if the mouse is released outside the penguin element
             document.addEventListener('mouseup', (e) => {
-                console.log("mouseup event");
                 if (isDragging) {
                     endDrag(e);
                 }
             });
             
             document.addEventListener('touchend', (e) => {
-                console.log("touchend event");
                 if (isDragging) {
                     endDrag(e);
                 }
@@ -917,8 +917,6 @@ To modify the game:
             
             if (penguinLastLaunchedTimestamp || gameOver) return;
             
-            console.log("startDrag called");
-            
             isDragging = true;
             const penguinRect = penguin.getBoundingClientRect();
             dragStartPos = {
@@ -954,8 +952,6 @@ To modify the game:
                 x: touchX - slingshotCenterX,
                 y: touchY - slingshotTopY
             };
-            
-            console.log("Event listeners added");
         }
         
         function onDrag(e) {
