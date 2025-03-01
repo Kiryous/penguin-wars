@@ -118,6 +118,7 @@ To modify the game:
         width: 30%;
         height: 50%;
         z-index: 2;
+        margin-left: -10px;
       }
 
       #base::before {
@@ -183,7 +184,7 @@ To modify the game:
 
       #slingshot {
         position: absolute;
-        left: 27%;
+        left: calc(27% - 20px);
         bottom: 20%;
         width: 10px;
         height: 100px;
@@ -328,6 +329,7 @@ To modify the game:
         font-size: 12px;
         cursor: pointer;
         z-index: 10;
+        display: none;
       }
 
       #debug-panel {
@@ -403,7 +405,7 @@ To modify the game:
       #waiting-penguin {
         position: absolute;
         font-size: 35px;
-        left: 18%;
+        left: calc(18% - 20px);
         bottom: 20%;
         user-select: none;
         -webkit-user-select: none;
@@ -959,10 +961,12 @@ To modify the game:
           .getElementById("resume-button")
           .addEventListener("click", resumeGame);
 
-        // Add event listener for debug toggle
-        document
-          .getElementById("debug-toggle")
-          .addEventListener("click", toggleDebug);
+        const queryParams = new URLSearchParams(window.location.search);
+        if (queryParams.get("debug")) {
+          const debugToggle = document.getElementById("debug-toggle");
+          debugToggle.style.display = "block";
+          debugToggle.addEventListener("click", toggleDebug);
+        }
 
         // Start debug info updates
         updateDebugInfo();
@@ -1230,7 +1234,7 @@ To modify the game:
 
         // CHANGE: Clone the penguin for launch
         const penguinClone = document.createElement("div");
-        penguinClone.id = "penguin-clone";
+        penguinClone.className = "js-penguin-clone";
         penguinClone.style.position = "absolute";
         penguinClone.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
         penguinClone.style.zIndex = "3";
@@ -1646,9 +1650,7 @@ To modify the game:
             penguin.style.opacity = "1";
           }, 1000);
         }
-        if (penguinHasStopped) {
-          return;
-        }
+
         // Continue animation
         animationFrameId = requestAnimationFrame(updatePhysics);
       }
@@ -1702,7 +1704,7 @@ To modify the game:
 
           // Create a clone of the waiting penguin for animation
           const penguinClone = document.createElement("div");
-          penguinClone.id = "penguin-clone";
+          penguinClone.className = "js-penguin-clone";
           penguinClone.style.position = "absolute";
           penguinClone.style.transform = `translate(${waitingPenguinRect.left}px, ${waitingPenguinRect.top}px)`;
           penguinClone.style.transition = "all 0.5s ease-in-out";
@@ -1933,10 +1935,10 @@ To modify the game:
         }
 
         // Remove any active penguin clone
-        if (activePenguinClone && activePenguinClone.parentNode) {
-          activePenguinClone.parentNode.removeChild(activePenguinClone);
-          activePenguinClone = null;
-        }
+        const penguinClones = document.querySelectorAll(".js-penguin-clone");
+        penguinClones.forEach((penguinClone) => {
+          penguinClone.remove();
+        });
       }
 
       function restartGame() {
