@@ -305,7 +305,7 @@ To modify the game:
         font-weight: bold;
       }
 
-      #restart-button {
+      .emoji-button {
         border: none;
         cursor: pointer;
         z-index: 10;
@@ -313,7 +313,7 @@ To modify the game:
         background-color: transparent;
       }
 
-      #restart-button:active {
+      .emoji-button:active {
         transform: scale(0.9);
       }
 
@@ -598,20 +598,6 @@ To modify the game:
         animation: baseDamage 0.5s ease-in-out;
       }
 
-      #pause-button {
-        background-color: transparent;
-        color: white;
-        border: none;
-        cursor: pointer;
-        z-index: 10;
-        font-size: 2.5rem;
-        font-weight: bold;
-      }
-
-      #pause-button:active {
-        transform: scale(0.9);
-      }
-
       #pause-overlay {
         position: absolute;
         top: 0;
@@ -706,8 +692,9 @@ To modify the game:
       </div>
       <div class="game-top-bar">
         <div class="game-controls">
-          <button id="restart-button">🔄</button>
-          <button id="pause-button">⏸️</button>
+          <button id="restart-button" class="emoji-button">🔄</button>
+          <button id="pause-button" class="emoji-button">⏸️</button>
+          <button id="mute-button" class="emoji-button">🔇</button>
         </div>
         <div class="game-stats">
           <div id="score-container"><span id="score">0</span></div>
@@ -847,6 +834,7 @@ To modify the game:
       // Variables for sound effects
       let lastStretchMagnitude = 0; // Track the last stretch magnitude for sound effects
       let lastStretchSoundTime = 0; // Track when the last stretch sound was played
+      let isMuted = false; // Track if audio is muted
       let penguinSunk = false; // Flag to track if penguin is sunk in water
       let slowMovementTime = 0; // Track how long the penguin has been moving slowly
       let MAX_SLOW_MOVEMENT_TIME = 2000; // Maximum time in ms to allow slow movement before reset
@@ -995,6 +983,14 @@ To modify the game:
         document
           .getElementById("resume-button")
           .addEventListener("click", resumeGame);
+
+        // Add event listener for mute button
+        document
+          .getElementById("mute-button")
+          .addEventListener("click", toggleMute);
+
+        // Initialize mute button to show correct icon (unmuted by default)
+        document.getElementById("mute-button").textContent = "🔊";
 
         const queryParams = new URLSearchParams(window.location.search);
         if (queryParams.get("debug")) {
@@ -2107,6 +2103,9 @@ To modify the game:
 
       // Reusable function to play sound effects
       function playSound(soundType) {
+        // Skip playing sound if muted
+        if (isMuted) return;
+
         // Randomly select between sound variant 1 or 2
         const soundIndex = Math.random() > 0.5 ? 1 : 2;
         const sound = document.getElementById(
@@ -2530,6 +2529,15 @@ To modify the game:
         if (gameAnimationFrameId) {
           gameLastTimestamp = performance.now();
         }
+      }
+
+      // Toggle mute function for audio
+      function toggleMute() {
+        isMuted = !isMuted;
+        const muteButton = document.getElementById("mute-button");
+
+        // Update button icon: 🔇 for muted, 🔊 for unmuted
+        muteButton.textContent = isMuted ? "🔇" : "🔊";
       }
     </script>
   </body>
