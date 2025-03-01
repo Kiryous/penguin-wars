@@ -94,16 +94,16 @@ To modify the game:
             position: absolute;
             bottom: 0;
             width: 100%;
-            height: 20%;
+            height: 1px;
             background-color: white;
         }
         
         /* Rename grass to sea - this is the boundary between sea and ice */
         #sea {
             position: absolute;
-            bottom: 20%;
+            bottom: 0;
             width: 100%;
-            height: 5%;
+            height: 25%;
             background-color: #87CEEB; /* Light blue for sea surface */
             border-bottom: 2px solid #B0E0E6; /* Light blue border */
         }
@@ -112,12 +112,15 @@ To modify the game:
         #base {
             position: absolute;
             left: 0;
-            bottom: 20%;
-            width: 2%;
-            height: 30%;
+            bottom: 0%;
+            width: 30%;
+            height: 45%;
             background-color: #F0F8FF; /* Alice blue for ice structure */
             border-right: 4px solid #E0FFFF; /* Light cyan border */
             z-index: 2;
+            display: flex;
+            justify-content: center;
+            align-items: end;
         }
         
         /* Health bar container */
@@ -152,7 +155,7 @@ To modify the game:
         #slingshot {
             position: absolute;
             left: 25%;
-            bottom: 25%;
+            bottom: 45%;
             width: 15px;
             height: 100px;
             background-color: #8B4513;
@@ -189,6 +192,10 @@ To modify the game:
             -webkit-user-select: none;
             z-index: 3;
             transition: transform 0.1s;
+        }
+
+        #penguin.dragging {
+            transform: scale(0.9);
         }
         
         .face-right {
@@ -284,9 +291,6 @@ To modify the game:
         }
         
         #instructions {
-            position: absolute;
-            bottom: 70px;
-            left: 20px;
             max-width: 400px;
             padding: 10px;
             border-radius: 10px;
@@ -360,7 +364,7 @@ To modify the game:
             position: absolute;
             font-size: 35px;
             left: 15%;
-            bottom: 25%;
+            bottom: 45%;
             user-select: none;
             -webkit-user-select: none;
             z-index: 2;
@@ -388,7 +392,8 @@ To modify the game:
         }
         
         .slingshot-penguin-animate {
-            animation: slingshot-penguin-animation 3s ease-in-out infinite;
+            /* we don't want this animation because it's interfering with the penguin's movement via transform */
+            /* animation: slingshot-penguin-animation 3s ease-in-out infinite; */
         }
         
         #game-over-overlay {
@@ -485,9 +490,9 @@ To modify the game:
         
         /* Wave transition animation */
         @keyframes waveTransition {
-            0% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.2); }
-            100% { transform: translateX(-50%) scale(1); }
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
         }
         
         .wave-transition {
@@ -563,16 +568,22 @@ To modify the game:
         <div id="game-area">
             <div id="sea"></div>
             <div id="ground"></div>
-            <div id="base"></div>
+            <div id="base">
+                <div id="instructions">
+                    Drag the penguin back, then release to launch!<br>
+                    Stop the sea invaders before they reach your base.<br>
+                    Your base has 100 health. Each enemy that reaches it deals 10 damage.
+                </div>
+            </div>
             <div id="slingshot">
                 <div id="slingshot-band-left"></div>
                 <div id="slingshot-band-right"></div>
             </div>
             <div id="penguin">
-                <div class="face-right js-penguin-emoji">🐧</div>
+                <div class="face-right penguin-emoji js-penguin-emoji">🐧</div>
             </div>
             <div id="waiting-penguin" class="jumping">
-                <div class="face-right js-penguin-emoji">🐧</div>
+                <div class="face-right penguin-emoji js-penguin-emoji">🐧</div>
             </div>
             <div id="touch-marker"></div>
         </div>
@@ -588,12 +599,6 @@ To modify the game:
         </div>
 
     </div>
-
-        <div id="instructions">
-            Drag the penguin back, then release to launch!<br>
-            Stop the sea invaders before they reach your base.<br>
-            Your base has 100 health. Each enemy that reaches it deals 10 damage.
-        </div>
         
         <!-- Pause overlay -->
         <div id="pause-overlay">
@@ -642,7 +647,7 @@ To modify the game:
         setViewportHeight();
         window.addEventListener('resize', function() {
             setViewportHeight();
-            if (!isPenguinLaunched) {
+            if (!penguinLastLaunchedTimestamp) {
                 resetPositions();
             }
         });
@@ -650,6 +655,11 @@ To modify the game:
         // Game initialization
         document.addEventListener('DOMContentLoaded', initGame);
         window.addEventListener('load', initGame); // Additional initialization on full load
+
+        const RESET_IN_FROM_LAUNCH = 1000; // Time in ms to reset the penguin if it's idle
+        const BASE_ENEMIES = 5;
+        const BASE_ENEMY_SPEED = 0.5;
+
         
         // Global variables
         let penguin;
@@ -659,7 +669,7 @@ To modify the game:
         let slingshotBandRight;
         let enemies = []; // Renamed from pigs to enemies
         let score = 0;
-        let isPenguinLaunched = false;
+        let penguinLastLaunchedTimestamp = false;
         let isDragging = false;
         let initialPenguinPos = { x: 0, y: 0 };
         let restPosition = { x: 0, y: 0 };
@@ -674,15 +684,15 @@ To modify the game:
         let touchMarker;
         let baseHealth = 100; // Base health
         let currentWave = 1; // Current wave number
-        let enemiesInWave = 7; // Number of enemies in current wave
+        let enemiesInWave = BASE_ENEMIES; // Number of enemies in current wave
         let waveInProgress = false; // Flag to track if a wave is in progress
         let enemySpawnInterval = null; // Interval for spawning enemies
-        let enemySpeed = 0.7; // Base speed for enemies - increased from 0.5 to 0.7
+        let enemySpeed = BASE_ENEMY_SPEED; // Base speed for enemies - increased from 0.5 to 0.7
         let gameOver = false;
         let gameEnding = false; // Flag to indicate the game is ending but not yet over
         let faviconLink; // Link element for favicon
         let slowMovementTime = 0; // Track how long the penguin has been moving slowly
-        let MAX_SLOW_MOVEMENT_TIME = 1000; // Reduced from 2000ms to 1000ms to reset slow penguins faster
+        let MAX_SLOW_MOVEMENT_TIME = 2000; // Maximum time in ms to allow slow movement before reset
         let gamePaused = false; // Flag to track if the game is paused
         
         // Physics constants
@@ -767,12 +777,12 @@ To modify the game:
                 y: slingshotRect.top - penguin.offsetHeight + 10 // Add a small overlap to make it look like it's on the slingshot
             };
             
-            // Make sure the waiting penguin's span has the correct transform
+            // Make sure the waiting penguin's div has the correct transform
             const waitingPenguinDiv = waitingPenguin.querySelector('.js-penguin-emoji');
             if (waitingPenguinDiv) {
                 waitingPenguinDiv.classList.add('face-right');
             } else {
-                // If the span doesn't exist for some reason, recreate it
+                // If the div doesn't exist for some reason, recreate it
                 waitingPenguin.innerHTML = '<div class="face-right js-penguin-emoji">🐧</div>';
             }
             
@@ -786,6 +796,9 @@ To modify the game:
             // Add event listeners for mouse/touch
             penguin.addEventListener('mousedown', startDrag, { passive: false });
             penguin.addEventListener('touchstart', startDrag, { passive: false });
+            
+            document.addEventListener('mousemove', onDrag, { passive: false });
+            document.addEventListener('touchmove', onDrag, { passive: false });
             
             // Add global event listeners for mouse/touch release
             // This ensures the penguin is launched even if the mouse is released outside the penguin element
@@ -828,7 +841,7 @@ To modify the game:
             score = 0;
             baseHealth = 100;
             currentWave = 1;
-            enemiesInWave = 7; // Updated to match our new base enemy count
+            enemiesInWave = BASE_ENEMIES; // Updated to match our new base enemy count
             waveInProgress = false;
             gameOver = false;
             gameEnding = false;
@@ -868,7 +881,7 @@ To modify the game:
         function startDrag(e) {
             e.preventDefault();
             
-            if (isPenguinLaunched || gameOver) return;
+            if (penguinLastLaunchedTimestamp || gameOver) return;
             
             console.log("startDrag called");
             
@@ -881,11 +894,12 @@ To modify the game:
             
             // Remove the animation class when dragging starts
             penguin.classList.remove('slingshot-penguin-animate');
+            penguin.classList.add('dragging');
             
             // Set initial penguin position for elastic calculations
             initialPenguinPos = {
-                x: parseInt(penguin.style.left) || restPosition.x,
-                y: parseInt(penguin.style.top) || restPosition.y
+                x: parseInt(penguinRect.left) || restPosition.x,
+                y: parseInt(penguinRect.top) || restPosition.y
             };
             
             // Show slingshot bands
@@ -906,11 +920,6 @@ To modify the game:
                 x: touchX - slingshotCenterX,
                 y: touchY - slingshotTopY
             };
-            
-            // Add event listeners for movement only
-            // Release events are handled by global event listeners
-            document.addEventListener('mousemove', onDrag, { passive: false });
-            document.addEventListener('touchmove', onDrag, { passive: false });
             
             console.log("Event listeners added");
         }
@@ -960,9 +969,10 @@ To modify the game:
             };
             
             // Update penguin position
-            penguin.style.left = `${currentPos.x}px`;
-            penguin.style.top = `${currentPos.y}px`;
-            
+            //penguin.style.left = `${currentPos.x}px`;
+            //penguin.style.top = `${currentPos.y}px`;
+            penguin.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
+
             // Update slingshot bands
             updateSlingshotBands(currentPos.x + PENGUIN_RADIUS, currentPos.y + PENGUIN_RADIUS);
             
@@ -1007,17 +1017,10 @@ To modify the game:
         function endDrag(e) {
             if (!isDragging) return;
             
-            console.log("endDrag called");
-            debugger;
-            
             isDragging = false;
-            
+            penguin.classList.remove('dragging');
             // Hide touch marker
             touchMarker.style.display = 'none';
-            
-            // Remove event listeners for movement only
-            document.removeEventListener('mousemove', onDrag);
-            document.removeEventListener('touchmove', onDrag);
             
             // Calculate velocity based on drag distance
             const slingshotRect = slingshot.getBoundingClientRect();
@@ -1046,12 +1049,12 @@ To modify the game:
             console.log("Pull distance:", pullDistance);
             
             // Only launch if the pull distance is significant enough
-            if (pullDistance < 5) {
-                // Pull distance too small, reset penguin without launching
-                console.log("Launch canceled: Pull distance too small");
-                resetPenguin();
-                return;
-            }
+            // if (pullDistance < 5) {
+            //     // Pull distance too small, reset penguin without launching
+            //     console.log("Launch canceled: Pull distance too small");
+            //     resetPenguin();
+            //     return;
+            // }
             
             const powerFactor = Math.min(pullDistance / 50, 3); // Cap the power factor
             
@@ -1080,7 +1083,7 @@ To modify the game:
             slingshotBandRight.style.display = 'none';
             
             // Start physics simulation
-            isPenguinLaunched = true;
+            penguinLastLaunchedTimestamp = performance.now();
             penguinLastTimestamp = performance.now(); // Use penguin-specific timestamp
             animationFrameId = requestAnimationFrame(updatePhysics);
             
@@ -1103,8 +1106,6 @@ To modify the game:
             const deltaTime = timestamp - penguinLastTimestamp;
             penguinLastTimestamp = timestamp;
 
-            debugger;
-            
             // Scale time factor to keep physics consistent regardless of frame rate
             const timeScale = deltaTime / 16; // Normalized to 60fps
             
@@ -1117,7 +1118,7 @@ To modify the game:
             
             // Check for collision with ground
             const gameRect = document.getElementById('game-area').getBoundingClientRect();
-            const groundY = gameRect.height * 0.8; // 80% of game area height (ground starts at 20% from bottom)
+            const groundY = gameRect.height;
             
             // Get slingshot position to determine if we should apply left wall collision
             const slingshotRect = slingshot.getBoundingClientRect();
@@ -1163,8 +1164,9 @@ To modify the game:
             velocity.x *= FRICTION;
             
             // Update penguin position
-            penguin.style.left = `${currentPos.x}px`;
-            penguin.style.top = `${currentPos.y}px`;
+            //penguin.style.left = `${currentPos.x}px`;
+            //penguin.style.top = `${currentPos.y}px`;
+            penguin.style.transform = `translate(${currentPos.x}px, ${currentPos.y}px)`;
             
             // If game is ending, make sure penguin is visible above the overlay
             if (gameEnding) {
@@ -1248,6 +1250,25 @@ To modify the game:
                 }
             });
             
+            // Check if penguin has gone off screen
+            const pengiunOffScreen = (
+                currentPos.y < -PENGUIN_RADIUS * 4 || // Too far above
+                currentPos.y > gameRect.height + PENGUIN_RADIUS * 2 || // Too far below
+                currentPos.x < -PENGUIN_RADIUS * 4 || // Too far to the left
+                currentPos.x > gameRect.width + PENGUIN_RADIUS * 4 // Too far to the right
+            );
+            
+            if (pengiunOffScreen && !gameEnding) {
+                // Penguin has gone off screen, reset it
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                if (debugMode) {
+                    console.log("Penguin reset: Off screen");
+                }
+                resetPenguin();
+                return;
+            }
+            
             // Stop animation if penguin is almost stopped
             const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
             
@@ -1291,6 +1312,15 @@ To modify the game:
                 // Reset the slow movement timer if penguin is moving normally
                 slowMovementTime = 0;
             }
+
+            const timeSinceLastLaunch = performance.now() - penguinLastLaunchedTimestamp;
+
+            if (timeSinceLastLaunch > RESET_IN_FROM_LAUNCH) {
+                // Penguin has been idle for more than 1 second, reset it
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                resetPenguin();
+            }
             
             if (penguinHasStopped) {
                 // Penguin has stopped on the ground
@@ -1300,75 +1330,77 @@ To modify the game:
                 // Reset penguin for next launch
                 setTimeout(() => {
                     resetPenguin();
-                }, 100); // Changed from 500ms to 100ms for faster reloading
+                }, 500);
             } else {
                 // Continue animation
                 animationFrameId = requestAnimationFrame(updatePhysics);
             }
         }
         
-        function switchToNextEnemy() {
+        function switchToNextPenguin() {
             // Decrement enemies remaining
             enemiesInWave--;
             
             if (enemiesInWave > 0) {
-                // Move the waiting enemy to the slingshot
+                // Move the waiting penguin to the slingshot
                 waitingPenguin.classList.remove('jumping');
                 
-                // Animate the waiting enemy moving to the slingshot
+                // Animate the waiting penguin moving to the slingshot
                 const slingshotRect = slingshot.getBoundingClientRect();
-                const waitingEnemyRect = waitingPenguin.getBoundingClientRect();
+                const waitingPenguinRect = waitingPenguin.getBoundingClientRect();
                 
-                // Get the current enemy emoji from the waiting penguin
-                const waitingEnemySpan = waitingPenguin.querySelector('span');
-                const currentEnemyEmoji = waitingEnemySpan ? waitingEnemySpan.textContent : TARGET_TYPES[0].emoji;
+                // Get the current penguin emoji from the waiting penguin
+                const waitingPenguinDiv = waitingPenguin.querySelector('.js-penguin-emoji');
+                const currentPenguinEmoji = waitingPenguinDiv ? waitingPenguinDiv.textContent : "🐧";
                 
-                // Create a clone of the waiting enemy for animation
-                const enemyClone = document.createElement('div');
-                enemyClone.id = 'enemy-clone';
-                enemyClone.style.position = 'absolute';
-                enemyClone.style.left = `${waitingEnemyRect.left}px`;
-                enemyClone.style.top = `${waitingEnemyRect.top}px`;
-                enemyClone.style.transition = 'all 0.5s ease-in-out';
-                enemyClone.style.zIndex = '5';
-                enemyClone.style.fontSize = '35px';
+                // Create a clone of the waiting penguin for animation
+                const penguinClone = document.createElement('div');
+                penguinClone.id = 'penguin-clone';
+                penguinClone.style.position = 'absolute';
+                penguinClone.style.left = `${waitingPenguinRect.left}px`;
+                penguinClone.style.top = `${waitingPenguinRect.top}px`;
+                penguinClone.style.transition = 'all 0.5s ease-in-out';
+                penguinClone.style.zIndex = '5';
+                penguinClone.style.fontSize = '35px';
                 
-                // Add the enemy emoji with face-right class
-                const enemySpan = document.createElement('span');
-                enemySpan.style.transform = 'scaleX(-1)';
-                enemySpan.style.display = 'inline-block';
-                enemySpan.textContent = currentEnemyEmoji;
-                enemyClone.appendChild(enemySpan);
+                // Add the penguin emoji with face-right class
+                const penguinDiv = document.createElement('div');
+                penguinDiv.style.transform = 'scaleX(-1)';
+                penguinDiv.style.display = 'inline-block';
+                penguinDiv.textContent = currentPenguinEmoji;
+                penguinClone.appendChild(penguinDiv);
                 
-                document.getElementById('game-area').appendChild(enemyClone);
+                document.getElementById('game-area').appendChild(penguinClone);
                 
-                // Hide the original waiting enemy
+                // Hide the original waiting penguin
                 waitingPenguin.style.opacity = '0';
                 
                 // Animate the clone to the slingshot position
                 setTimeout(() => {
-                    enemyClone.style.left = `${restPosition.x}px`;
-                    enemyClone.style.top = `${restPosition.y}px`;
+                    penguinClone.style.left = `${restPosition.x}px`;
+                    penguinClone.style.top = `${restPosition.y}px`;
                 }, 50);
                 
-                // After animation completes, reset the enemy
+                // After animation completes, reset the penguin
                 setTimeout(() => {
                     // Remove the clone
-                    if (enemyClone.parentNode) {
-                        enemyClone.parentNode.removeChild(enemyClone);
+                    if (penguinClone.parentNode) {
+                        penguinClone.parentNode.removeChild(penguinClone);
                     }
                     
-                    // Reset the main enemy
+                    // Reset penguin
                     resetPenguin();
                     
-                    // Hide the waiting enemy (it's now in the slingshot)
-                    waitingPenguin.style.display = 'none';
-                }, 300); // Reduced from 600ms to 300ms for faster transitions
+                    // Reset waiting penguin
+                    waitingPenguin.style.display = 'block';
+                    waitingPenguin.style.opacity = '1';
+                    waitingPenguin.classList.add('jumping');
+                }, 600);
                 
                 // Select a new random enemy for the next waiting penguin
                 const randomEnemyType = TARGET_TYPES[Math.floor(Math.random() * TARGET_TYPES.length)];
                 const penguinEmoji = penguin.querySelector('.js-penguin-emoji');
-                penguinEmoji.textContent = currentEnemyEmoji;
+                penguinEmoji.textContent = currentPenguinEmoji;
             } else {
                 // No more enemies - check if all enemies are hit
                 const allEnemiesHit = enemies.every(enemy => enemy.isHit);
@@ -1459,9 +1491,10 @@ To modify the game:
             };
             
             // Only update penguin position if it's not launched
-            if (!isPenguinLaunched) {
-                penguin.style.left = `${restPosition.x}px`;
-                penguin.style.top = `${restPosition.y}px`;
+            if (!penguinLastLaunchedTimestamp) {
+                //penguin.style.left = `${restPosition.x}px`;
+                //penguin.style.top = `${restPosition.y}px`;
+                penguin.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
                 currentPos = { x: restPosition.x, y: restPosition.y };
             }
             
@@ -1507,21 +1540,22 @@ To modify the game:
         
         function resetPenguin() {
             // Recalculate the slingshot position every time we reset
-            // This ensures the enemy is always positioned correctly
+            // This ensures the penguin is always positioned correctly
             const slingshotRect = slingshot.getBoundingClientRect();
             restPosition = {
                 x: slingshotRect.left + (slingshotRect.width / 2) - (penguin.offsetWidth / 2),
                 y: slingshotRect.top - penguin.offsetHeight + 10 // Add a small overlap
             };
             
-            // Reset enemy position to the slingshot
-            penguin.style.left = `${restPosition.x}px`;
-            penguin.style.top = `${restPosition.y}px`;
+            // Reset penguin position to the slingshot
+            //penguin.style.left = `${restPosition.x}px`;
+            //penguin.style.top = `${restPosition.y}px`;
+            penguin.style.transform = `translate(${restPosition.x}px, ${restPosition.y}px)`;
             
             // Reset physics variables
             currentPos = { x: restPosition.x, y: restPosition.y };
             velocity = { x: 0, y: 0 };
-            isPenguinLaunched = false;
+            penguinLastLaunchedTimestamp = 0;
             slowMovementTime = 0; // Reset slow movement timer
             
             // Clear any stored drag distance
@@ -1550,6 +1584,11 @@ To modify the game:
         }
         
         function restartGame() {
+
+            // TODO: fix, now the reset is broken
+            window.location.reload();
+            return;
+
             // Hide game over overlay and ensure game is unpaused
             document.getElementById('game-over-overlay').style.display = 'none';
             document.getElementById('pause-overlay').style.display = 'none';
@@ -1565,26 +1604,26 @@ To modify the game:
                 gameAnimationFrameId = null;
             }
             
-            // Reset enemy
+            // Reset penguin
             resetPenguin();
             
-            // Reset waiting enemy
+            // Reset waiting penguin
             waitingPenguin.style.display = 'block';
             waitingPenguin.style.opacity = '1';
             waitingPenguin.classList.add('jumping');
             
-            // Make sure the waiting enemy's span has the correct transform
-            const waitingEnemyDiv = waitingPenguin.querySelector('span');
+            // Make sure the waiting enemy's div has the correct transform
+            const waitingPenguinDiv = waitingPenguin.querySelector('.js-penguin-emoji');
             // Select a random water-related enemy
             const randomEnemyType = TARGET_TYPES[Math.floor(Math.random() * TARGET_TYPES.length)];
             
-            if (waitingEnemyDiv) {
-                waitingEnemyDiv.style.transform = 'scaleX(-1)';
-                waitingEnemyDiv.style.display = 'inline-block';
-                waitingEnemyDiv.textContent = randomEnemyType.emoji;
+            if (waitingPenguinDiv) {
+                waitingPenguinDiv.style.transform = 'scaleX(-1)';
+                waitingPenguinDiv.style.display = 'inline-block';
+                waitingPenguinDiv.textContent = randomEnemyType.emoji;
             } else {
-                // If the span doesn't exist for some reason, recreate it
-                waitingPenguin.innerHTML = `<span style="transform: scaleX(-1); display: inline-block;">${randomEnemyType.emoji}</span>`;
+                // If the div doesn't exist for some reason, recreate it
+                waitingPenguin.innerHTML = `<div class="js-penguin-emoji face-right">${randomEnemyType.emoji}</div>`;
             }
             
             applyRandomJumpDelay();
@@ -1597,7 +1636,7 @@ To modify the game:
             
             // Reset score and enemies
             score = 0;
-            enemiesInWave = 7;
+            enemiesInWave = BASE_ENEMIES;
             gameOver = false;
             gameEnding = false;
             document.getElementById('score').textContent = score;
@@ -1629,7 +1668,7 @@ To modify the game:
                     Game Area: ${gameRect.width.toFixed(0)}x${gameRect.height.toFixed(0)}<br>
                     Penguin Pos: (${currentPos.x.toFixed(1)}, ${currentPos.y.toFixed(1)})<br>
                     Velocity: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(2)})<br>
-                    Penguin State: ${isPenguinLaunched ? 'Launched' : 'Ready'}<br>
+                    Penguin State: ${penguinLastLaunchedTimestamp ? 'Launched' : 'Ready'}<br>
                     Enemies Left: ${enemiesInWave}/${enemies.length}<br>
                     Current Level: ${currentLevel} (${DIFFICULTY_LEVELS[currentDifficulty].name})<br>
                     Touch Position: (${touchMarker.style.left}, ${touchMarker.style.top})
@@ -1677,7 +1716,7 @@ To modify the game:
             // Update favicon to explosion
             setFavicon('explosion');
             
-            // Reset favicon to enemy after a delay
+            // Reset favicon to penguin after a delay
             setTimeout(() => {
                 document.getElementById('favicon').dataset.explosionActive = 'false';
                 updateFaviconDirection();
@@ -1787,7 +1826,7 @@ To modify the game:
             enemy.element.style.transition = 'transform 0.3s ease-in-out';
             enemy.element.style.transform = `rotate(${wobbleAmount}deg) scale(${scaleAmount})`;
             
-            // Reset the enemy's transform after the wobble
+            // Reset the penguin's transform after the wobble
             setTimeout(() => {
                 enemy.element.style.transform = 'rotate(0deg) scale(1)';
             }, 300);
@@ -1802,11 +1841,11 @@ To modify the game:
             // Update wave display
             document.getElementById('wave-number').textContent = currentWave;
             
-            // Calculate number of enemies for this wave - increased from 5 to 7 base enemies
-            enemiesInWave = 7 + Math.floor(currentWave / 1.5); // Increase enemies as waves progress
+            // Calculate number of enemies for this wave
+            enemiesInWave = BASE_ENEMIES + Math.floor(currentWave / 1.5); // Increase enemies as waves progress
             
-            // Calculate enemy speed for this wave - increased base speed from 0.5 to 0.7
-            enemySpeed = 0.7 + (currentWave * 0.12); // Increase speed as waves progress
+            // Calculate enemy speed for this wave
+            enemySpeed = BASE_ENEMY_SPEED + (currentWave * 0.12); // Increase speed as waves progress
             
             // Set wave in progress flag
             waveInProgress = true;
@@ -1852,6 +1891,8 @@ To modify the game:
         function spawnEnemy() {
             const gameArea = document.getElementById('game-area');
             const gameRect = gameArea.getBoundingClientRect();
+            const seaElement = document.getElementById('sea');
+            const seaRect = seaElement.getBoundingClientRect();
             
             // Create enemy element
             const enemyElement = document.createElement('div');
@@ -1873,9 +1914,15 @@ To modify the game:
             
             // Set initial position - start from right side of screen
             const x = gameRect.width;
-            // Random y position above the ground but below the top
-            const groundHeight = gameRect.height * 0.20;
-            const y = groundHeight + Math.random() * (gameRect.height * 0.6);
+            
+            // Calculate the sea's top position and the 100px area above it
+            const seaHeight = seaRect.height - 100;
+            const seaTop = seaRect.top;
+            const spawnAreaTop = Math.max(0, seaTop); // Don't go above the game area
+            const spawnAreaHeight = seaHeight + (seaTop - spawnAreaTop);
+            
+            // Random y position within sea + 100px above
+            const y = spawnAreaTop + Math.random() * spawnAreaHeight;
             
             enemyElement.style.left = `${x}px`;
             enemyElement.style.top = `${y}px`;
@@ -1895,7 +1942,7 @@ To modify the game:
             });
             
             // Start animation loop if not already running
-            if (!gameAnimationFrameId && !isPenguinLaunched) {
+            if (!gameAnimationFrameId && !penguinLastLaunchedTimestamp) {
                 gameLastTimestamp = performance.now();
                 gameAnimationFrameId = requestAnimationFrame(updateGame);
             }
