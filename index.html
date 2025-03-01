@@ -1496,23 +1496,56 @@ To modify the game:
               );
 
               // Determine if the penguin is moving fast enough to destroy the enemy
-              if (currentSpeed >= MIN_EXPLOSION_SPEED) {
-                // Mark enemy as hit
-                enemy.isHit = true;
+              // Scale the minimum required speed based on the enemy's size
+              const requiredSpeed = MIN_EXPLOSION_SPEED * (enemy.size * 0.8);
 
-                // Create explosion effects at the enemy's position
-                createExplosionEffect(enemyCenterX, enemyCenterY);
+              if (currentSpeed >= requiredSpeed) {
+                // Calculate damage based on penguin speed
+                const damage = Math.ceil(currentSpeed / requiredSpeed);
+                enemy.hitPoints -= damage;
 
-                // reset the sunk flag because the penguin hit the enemy
-                // TODO: more robust solution
-                penguinSunk = false;
+                // Create small hit effect
+                createHitEffect(enemyCenterX, enemyCenterY, damage);
 
-                // Hide the enemy
-                enemy.element.style.opacity = "0";
+                // If enemy has no more hit points, destroy it
+                if (enemy.hitPoints <= 0) {
+                  // Mark enemy as hit
+                  enemy.isHit = true;
 
-                // Update score
-                score += enemy.points;
-                document.getElementById("score").textContent = score;
+                  // Create explosion effects at the enemy's position
+                  createExplosionEffect(enemyCenterX, enemyCenterY);
+
+                  // reset the sunk flag because the penguin hit the enemy
+                  // TODO: more robust solution
+                  penguinSunk = false;
+
+                  // Hide the enemy
+                  enemy.element.style.opacity = "0";
+
+                  // Update score
+                  score += enemy.points;
+                  document.getElementById("score").textContent = score;
+                } else {
+                  // Enemy is damaged but not destroyed
+                  // Visual feedback - make the enemy flash red and show damage
+                  enemy.element.style.filter =
+                    "sepia(1) saturate(3) hue-rotate(300deg) brightness(0.8)";
+
+                  // Show damage percentage as opacity
+                  const damagePercent =
+                    1 - enemy.hitPoints / enemy.maxHitPoints;
+                  enemy.element.style.opacity = (
+                    1 -
+                    damagePercent * 0.5
+                  ).toString(); // Don't make it too transparent
+
+                  // Clear the visual effect after a short delay
+                  setTimeout(() => {
+                    enemy.element.style.filter = `sepia(${damagePercent}) saturate(3) hue-rotate(${
+                      300 * damagePercent
+                    }deg)`;
+                  }, 300);
+                }
               } else {
                 // Not fast enough for explosion - just bounce off
                 handleLowVelocityCollision(enemy, dx, dy, distance);
@@ -2196,6 +2229,37 @@ To modify the game:
         }
       }
 
+      // Function to create a hit effect for partial damage
+      function createHitEffect(x, y, damage) {
+        // Create a hit indicator element
+        const hitIndicator = document.createElement("div");
+        hitIndicator.style.position = "absolute";
+        hitIndicator.style.zIndex = "5";
+        hitIndicator.style.color = "white";
+        hitIndicator.style.fontWeight = "bold";
+        hitIndicator.style.fontSize = `${20 + damage * 3}px`;
+        hitIndicator.style.textShadow = "0 0 3px red, 0 0 5px firebrick";
+        hitIndicator.style.transform = `translate(${x}px, ${y}px)`;
+        hitIndicator.style.transition = "all 0.8s ease-out";
+        hitIndicator.textContent = damage > 1 ? `${damage}!` : "Hit!";
+
+        document.getElementById("game-area").appendChild(hitIndicator);
+
+        // Animate the hit indicator
+        setTimeout(() => {
+          hitIndicator.style.transform = `translate(${x}px, ${y - 40}px)`;
+          hitIndicator.style.opacity = "0";
+        }, 10);
+
+        // Remove the hit indicator after animation
+        setTimeout(() => {
+          hitIndicator.remove();
+        }, 800);
+
+        // Play a hit sound if available
+        playSound("hit");
+      }
+
       // Function to apply a random animation delay to the waiting enemy
       function applyRandomJumpDelay() {
         // Apply a random animation delay to make the jumping more natural
@@ -2375,6 +2439,8 @@ To modify the game:
           type: enemyType.emoji,
           points: enemyType.points,
           size: finalSize, // Store the size for collision detection
+          hitPoints: Math.ceil(finalSize * 2), // Larger enemies have more hit points
+          maxHitPoints: Math.ceil(finalSize * 2), // Store the max hit points for damage calculation
         });
 
         // Start animation loop if not already running
