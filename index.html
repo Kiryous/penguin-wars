@@ -798,9 +798,13 @@ To modify the game:
       document.addEventListener("DOMContentLoaded", initGame);
       window.addEventListener("load", initGame); // Additional initialization on full load
 
+      // Gameplay constants
       const RESET_IN_FROM_LAUNCH = 1000; // Time in ms to reset the penguin if it's idle
-      const BASE_ENEMIES = 5;
-      const BASE_ENEMY_SPEED = 0.5;
+      const MAX_SLOW_MOVEMENT_TIME = 2000; // Maximum time in ms to allow slow movement before reset
+      const ENEMIES_MIN_SPAWN_DELAY = 200; // Minimum spawn delay
+      const ENEMIES_BASE_SPAWN_DELAY = 700; // Base spawn delay
+      const ENEMIES_BASE_COUNT = 5;
+      const ENEMIES_BASE_SPEED = 0.5;
 
       // Global variables
       let penguin;
@@ -825,7 +829,7 @@ To modify the game:
       let touchMarker;
       let baseHealth = 100; // Base health
       let currentWave = 1; // Current wave number
-      let enemiesInWave = BASE_ENEMIES; // Number of enemies in current wave
+      let enemiesInWave = ENEMIES_BASE_COUNT; // Number of enemies in current wave
       let waveInProgress = false; // Flag to track if a wave is in progress
       let enemySpawnInterval = null; // Interval for spawning enemies
       let activePenguinClone = null; // Active penguin clone being launched
@@ -837,7 +841,6 @@ To modify the game:
       let isMuted = false; // Track if audio is muted
       let penguinSunk = false; // Flag to track if penguin is sunk in water
       let slowMovementTime = 0; // Track how long the penguin has been moving slowly
-      let MAX_SLOW_MOVEMENT_TIME = 2000; // Maximum time in ms to allow slow movement before reset
       let gamePaused = false; // Flag to track if the game is paused
 
       // Physics constants
@@ -1011,7 +1014,7 @@ To modify the game:
         score = 0;
         baseHealth = 100;
         currentWave = 1;
-        enemiesInWave = BASE_ENEMIES; // Updated to match our new base enemy count
+        enemiesInWave = ENEMIES_BASE_COUNT; // Updated to match our new base enemy count
         waveInProgress = false;
         gameOver = false;
         gameEnding = false;
@@ -2034,7 +2037,7 @@ To modify the game:
 
         // Reset score and enemies
         score = 0;
-        enemiesInWave = BASE_ENEMIES;
+        enemiesInWave = ENEMIES_BASE_COUNT;
         gameOver = false;
         gameEnding = false;
         document.getElementById("score").textContent = score;
@@ -2274,10 +2277,10 @@ To modify the game:
         document.getElementById("wave-number").textContent = currentWave;
 
         // Calculate number of enemies for this wave
-        enemiesInWave = BASE_ENEMIES + Math.floor(currentWave / 1.5); // Increase enemies as waves progress
+        enemiesInWave = ENEMIES_BASE_COUNT + Math.floor(currentWave / 1.5); // Increase enemies as waves progress
 
         // Calculate enemy speed for this wave
-        enemySpeed = BASE_ENEMY_SPEED + currentWave * 0.12; // Increase speed as waves progress
+        enemySpeed = ENEMIES_BASE_SPEED + currentWave * 0.12; // Increase speed as waves progress
 
         // Set wave in progress flag
         waveInProgress = true;
@@ -2299,8 +2302,10 @@ To modify the game:
         }
 
         // Calculate spawn delay based on wave (faster spawns in later waves)
-        // Reduced base delay from 800ms to 500ms for more frequent spawns
-        const spawnDelay = Math.max(200, 500 - currentWave * 50);
+        const spawnDelay = Math.max(
+          ENEMIES_MIN_SPAWN_DELAY,
+          ENEMIES_BASE_SPAWN_DELAY - currentWave * 50
+        );
 
         let enemiesSpawned = 0;
 
